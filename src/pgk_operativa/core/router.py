@@ -88,7 +88,7 @@ _KEYWORDS: dict[str, list[str]] = {
         "lo 1/2025",
         "masc",
         "jurisprudencia",
-        "ts ",
+        "ts",
         "audiencia nacional",
         "tsj",
     ],
@@ -193,8 +193,10 @@ def _classify_by_llm(mensaje: str) -> tuple[str, str]:
     razon = "llm sin razon explicita"
     for line in content.splitlines():
         if line.lower().startswith("modulo:"):
-            candidato = line.split(":", 1)[1].strip().lower()
-            candidato = re.sub(r"[^a-z]", "", candidato)
+            raw = line.split(":", 1)[1].strip().lower()
+            tokens = raw.split()
+            primero = tokens[0] if tokens else ""
+            candidato = re.sub(r"[^a-z]", "", primero)
             if candidato in _VALID_MODULES:
                 modulo = candidato
         elif line.lower().startswith("razon:"):

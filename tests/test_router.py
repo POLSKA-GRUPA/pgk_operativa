@@ -102,3 +102,93 @@ def test_word_boundary_respects_spanish_accents() -> None:
         modulo, _ = router.clasificar("una derivativa primitiva cualquiera sin sentido fiscal")
         assert modulo == "general"
         mock.assert_called_once()
+
+
+def test_ts_matches_tribunal_supremo_end_of_string() -> None:
+    """'ts' (legal, Tribunal Supremo) debe matchear al final de frase."""
+    modulo, razon = router.clasificar("Busca jurisprudencia del TS")
+    assert modulo == "legal"
+    assert "ts" in razon
+
+
+def test_ts_no_matches_inside_bots_or_rats() -> None:
+    """'ts' NO debe matchear dentro de 'bots', 'rats', etc."""
+    with patch.object(router, "_classify_by_llm", return_value=("general", "llm: nada")) as mock:
+        modulo, _ = router.clasificar("bots de automatizacion para rats de laboratorio")
+        assert modulo == "general"
+        mock.assert_called_once()
+
+
+def test_llm_parser_accepts_module_with_trailing_text() -> None:
+    """El parser del LLM debe extraer solo el primer token del modulo."""
+    fake_resp = type(
+        "Resp",
+        (),
+        {
+            "choices": [
+                type(
+                    "C",
+                    (),
+                    {
+                        "message": type(
+                            "M",
+                            (),
+                            {"content": "MODULO: fiscal (impuestos AEAT)\nRAZON: es fiscal"},
+                        )
+                    },
+                )
+            ]
+        },
+    )()
+    fake_client = type(
+        "Client",
+        (),
+        {
+            "chat": type(
+                "Chat",
+                (),
+                {"completions": type("Comp", (), {"create": lambda *a, **k: fake_resp})()},
+            )()
+        },
+    )()
+    with patch.object(router, "build_openai_client", return_value=(fake_client, "glm-4.6")):
+        modulo, razon = router._classify_by_llm("cualquier cosa")
+        assert modulo == "fiscal"
+        assert "es fiscal" in razon
+
+
+def test_llm_parser_accepts_module_with_dash_suffix() -> None:
+    """MODULO: fiscal - AEAT debe parsear fiscal."""
+    fake_resp = type(
+        "Resp",
+        (),
+        {
+            "choices": [
+                type(
+                    "C",
+                    (),
+                    {
+                        "message": type(
+                            "M",
+                            (),
+                            {"content": "MODULO: legal - sentencia\nRAZON: ts"},
+                        )
+                    },
+                )
+            ]
+        },
+    )()
+    fake_client = type(
+        "Client",
+        (),
+        {
+            "chat": type(
+                "Chat",
+                (),
+                {"completions": type("Comp", (), {"create": lambda *a, **k: fake_resp})()},
+            )()
+        },
+    )()
+    with patch.object(router, "build_openai_client", return_value=(fake_client, "glm-4.6")):
+        modulo, _ = router._classify_by_llm("jurisprudencia")
+        assert modulo == "legal"
