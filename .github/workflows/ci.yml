@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -55,7 +55,7 @@ jobs:
             exit 1
           fi
 
-      - name: Rutas: sin /Users/ hardcoded en Python
+      - name: Rutas sin /Users/ hardcoded en Python
         run: |
           if grep -rn "/Users/[a-zA-Z]" --include='*.py' \
               --exclude-dir=archivo --exclude-dir=.git .; then
