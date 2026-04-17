@@ -11,6 +11,7 @@ trazable). Si el mensaje es ambiguo, se delega a Z.ai para desempate.
 from __future__ import annotations
 
 import re
+import unicodedata
 from typing import get_args
 
 from pgk_operativa.core.graph_state import AnaState, ModuloTecnico
@@ -120,6 +121,18 @@ _KEYWORDS: dict[str, list[str]] = {
 }
 
 
+def _normalize(texto: str) -> str:
+    """Normaliza a minusculas y elimina diacriticos.
+
+    El texto del empleado llega con tildes ("declaracion", "nomina",
+    "cotizacion"). Los keywords estan sin tildes. Sin normalizar,
+    re.search no matchea porque lower() preserva acentos. Normalizamos
+    ambos lados para que el matching sea robusto.
+    """
+    nfkd = unicodedata.normalize("NFKD", texto.lower())
+    return "".join(ch for ch in nfkd if not unicodedata.combining(ch))
+
+
 def _keyword_matches(texto: str, kw: str) -> bool:
     """Coincidencia segura de keyword.
 
@@ -135,7 +148,7 @@ def _keyword_matches(texto: str, kw: str) -> bool:
 
 def _classify_by_keywords(mensaje: str) -> tuple[str, str] | None:
     """Clasifica por keywords. Devuelve (modulo, razon) o None si ambiguo."""
-    texto = mensaje.lower()
+    texto = _normalize(mensaje)
     matches: dict[str, list[str]] = {}
     for modulo, kws in _KEYWORDS.items():
         hit = [kw for kw in kws if _keyword_matches(texto, kw)]

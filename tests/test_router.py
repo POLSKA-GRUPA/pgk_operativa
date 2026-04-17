@@ -104,6 +104,26 @@ def test_word_boundary_respects_spanish_accents() -> None:
         mock.assert_called_once()
 
 
+@pytest.mark.parametrize(
+    ("mensaje", "modulo_esperado"),
+    [
+        ("¿Cuál es mi retención este trimestre?", "fiscal"),
+        ("Necesito la nómina de enero", "laboral"),
+        ("Revisa la cotización del mes", "laboral"),
+        ("Calcula la amortización del equipo", "contable"),
+        ("Haz la conciliación bancaria del Santander", "contable"),
+        ("Prepara la traducción del documento oficial", "docs"),
+        ("La declaración trimestral del modelo 303", "fiscal"),
+        ("Revisa la campaña de Google Ads", "marketing"),
+    ],
+)
+def test_classify_strips_diacritics(mensaje: str, modulo_esperado: str) -> None:
+    """Mensajes con tildes deben matchear keywords sin tildes (normalizacion NFKD)."""
+    modulo, razon = router.clasificar(mensaje)
+    assert modulo == modulo_esperado
+    assert "keywords" in razon
+
+
 def test_ts_matches_tribunal_supremo_end_of_string() -> None:
     """'ts' (legal, Tribunal Supremo) debe matchear al final de frase."""
     modulo, razon = router.clasificar("Busca jurisprudencia del TS")
