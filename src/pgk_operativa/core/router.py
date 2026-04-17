@@ -120,12 +120,25 @@ _KEYWORDS: dict[str, list[str]] = {
 }
 
 
+def _keyword_matches(texto: str, kw: str) -> bool:
+    """Coincidencia segura de keyword.
+
+    - Keywords de una sola palabra: word boundaries (evita falsos positivos
+      como "iva" dentro de "motivacion" o "contrato" dentro de "contrato
+      laboral").
+    - Keywords multipalabra: substring directo (ya son especificos de por si).
+    """
+    if " " in kw or "/" in kw:
+        return kw in texto
+    return re.search(rf"\b{re.escape(kw)}\b", texto) is not None
+
+
 def _classify_by_keywords(mensaje: str) -> tuple[str, str] | None:
     """Clasifica por keywords. Devuelve (modulo, razon) o None si ambiguo."""
     texto = mensaje.lower()
     matches: dict[str, list[str]] = {}
     for modulo, kws in _KEYWORDS.items():
-        hit = [kw for kw in kws if kw in texto]
+        hit = [kw for kw in kws if _keyword_matches(texto, kw)]
         if hit:
             matches[modulo] = hit
 

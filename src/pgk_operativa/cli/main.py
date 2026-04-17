@@ -47,11 +47,20 @@ def ana(
     ),
     nif: str | None = typer.Option(None, "--nif", help="NIF/NIE del cliente."),
     nombre: str | None = typer.Option(None, "--nombre", help="Nombre del cliente."),
+    debug: bool = typer.Option(
+        False,
+        "--debug",
+        help="Modo diagnostico: muestra modulo interno y razonamiento (uso tecnico).",
+    ),
 ) -> None:
     """Envia un mensaje a Ana.
 
     Por defecto Ana responde con 1 solo modelo (Z.ai GLM coding plan).
     Con `--consenso`, dispara 2 proveedores distintos (assert en runtime).
+
+    Ana es la unica cara visible: por defecto NO se exponen nombres de
+    modulos internos (fiscal, contable, laboral, legal, docs, marketing).
+    Usar `--debug` solo en desarrollo para inspeccionar el routing.
     """
     cfg = default_config()
     console.print(f"[bold cyan]Ana[/bold cyan] (default: {cfg.provider.value}/{cfg.model})")
@@ -78,11 +87,12 @@ def ana(
         console.print(f"[red]Error de configuracion:[/red] {exc}")
         raise typer.Exit(code=2) from exc
 
-    modulo = resultado.get("modulo_tecnico", "general")
-    razon = resultado.get("clasificacion_razonamiento", "")
     respuesta = resultado.get("respuesta_final", "(respuesta vacia)")
-    console.print(f"[dim]Modulo interno:[/dim] {modulo}  [dim]({razon})[/dim]")
-    console.print()
+    if debug:
+        modulo = resultado.get("modulo_tecnico", "general")
+        razon = resultado.get("clasificacion_razonamiento", "")
+        console.print(f"[dim]debug modulo={modulo} razon={razon}[/dim]")
+        console.print()
     console.print(respuesta)
 
 

@@ -70,3 +70,35 @@ def test_classify_tie_breaks_to_llm() -> None:
         modulo, _ = router.clasificar("Contrato de colaboracion con agencia de ads")
         assert modulo == "legal"
         mock.assert_called_once()
+
+
+def test_iva_no_matches_inside_motivacion() -> None:
+    """'iva' (fiscal) NO debe matchear dentro de 'motivacion'. Word boundary."""
+    with patch.object(router, "_classify_by_llm", return_value=("docs", "llm: carta")) as mock:
+        # 'motivacion' contiene 'iva' como substring, pero no como palabra.
+        # 'carta' (docs) sigue siendo keyword valida.
+        modulo, razon = router.clasificar("Dame la carta de motivacion para el puesto")
+        assert modulo == "docs"
+        assert "carta" in razon
+        mock.assert_not_called()
+
+
+def test_contrato_laboral_resolves_to_laboral() -> None:
+    """'contrato laboral' (laboral, frase) y 'contrato' (legal) empatan → LLM desempata."""
+    with patch.object(
+        router, "_classify_by_llm", return_value=("laboral", "llm: contrato de trabajo")
+    ) as mock:
+        modulo, razon = router.clasificar("Necesito preparar un contrato laboral para Kowalski")
+        assert modulo == "laboral"
+        assert razon
+        mock.assert_called_once()
+
+
+def test_word_boundary_respects_spanish_accents() -> None:
+    """Palabras con acentos o flexiones no deben disparar falsos positivos."""
+    # 'retencion' (fiscal) NO debe matchear dentro de 'retencionista' inventado.
+    # 'iva' NO debe matchear en 'derivativa' ni 'primitiva'.
+    with patch.object(router, "_classify_by_llm", return_value=("general", "llm: nada")) as mock:
+        modulo, _ = router.clasificar("una derivativa primitiva cualquiera sin sentido fiscal")
+        assert modulo == "general"
+        mock.assert_called_once()
