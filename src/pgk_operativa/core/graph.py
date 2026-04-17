@@ -1,14 +1,13 @@
 """Grafo LangGraph principal de pgk_operativa.
 
-Topologia Semana 1 (minimal):
+Topologia Semana 2 (con routing por modulo):
 
-    START -> ana_router -> ejecutor -> END
+    START -> ana_router -> {fiscal|contable|laboral|legal|docs|marketing|calidad|general} -> END
 
-El router Ana clasifica el mensaje y escribe `modulo_tecnico`. El
-ejecutor ramifica internamente via prompt especifico del modulo. En
-fases posteriores el grafo crecera con nodos dedicados por modulo,
-subgrafo de consenso opt-in, verificacion Perplexity, protocolo
-metodologico, consejo de direccion, memoria operativa, etc.
+El router Ana clasifica el mensaje y escribe `modulo_tecnico`. Luego
+el grafo enruta condicionalmente al nodo del modulo correspondiente.
+Cada modulo tiene su propio prompt especializado y en fases posteriores
+tendra logica propia (tools, RAG, motores deterministas, etc.).
 """
 
 from __future__ import annotations
@@ -22,17 +21,52 @@ from langgraph.graph.state import CompiledStateGraph
 
 from pgk_operativa.core.graph_state import AnaState
 from pgk_operativa.core.router import nodo_ana_router
+from pgk_operativa.nodos.calidad import nodo_calidad
+from pgk_operativa.nodos.contable import nodo_contable
+from pgk_operativa.nodos.docs import nodo_docs
 from pgk_operativa.nodos.ejecutor import nodo_ejecutor
+from pgk_operativa.nodos.fiscal import nodo_fiscal
+from pgk_operativa.nodos.laboral import nodo_laboral
+from pgk_operativa.nodos.legal import nodo_legal
+from pgk_operativa.nodos.marketing import nodo_marketing
+
+_MODULE_NODES: dict[str, object] = {
+    "fiscal": nodo_fiscal,
+    "contable": nodo_contable,
+    "laboral": nodo_laboral,
+    "legal": nodo_legal,
+    "docs": nodo_docs,
+    "marketing": nodo_marketing,
+    "calidad": nodo_calidad,
+}
+
+
+def _route_to_module(state: AnaState) -> str:
+    """Decide el nodo destino segun el modulo tecnico asignado por Ana."""
+    modulo = state.get("modulo_tecnico", "general")
+    if modulo in _MODULE_NODES:
+        return modulo
+    return "general"
 
 
 def build_graph() -> CompiledStateGraph:
-    """Construye y compila el grafo minimo de Semana 1."""
+    """Construye y compila el grafo con routing condicional por modulo."""
     builder = StateGraph(AnaState)
+
     builder.add_node("ana_router", nodo_ana_router)
-    builder.add_node("ejecutor", nodo_ejecutor)
+    for name, node_fn in _MODULE_NODES.items():
+        builder.add_node(name, node_fn)
+    builder.add_node("general", nodo_ejecutor)
+
     builder.add_edge(START, "ana_router")
-    builder.add_edge("ana_router", "ejecutor")
-    builder.add_edge("ejecutor", END)
+    builder.add_conditional_edges(
+        "ana_router",
+        _route_to_module,
+        {mod: mod for mod in [*_MODULE_NODES, "general"]},
+    )
+    for node in [*_MODULE_NODES, "general"]:
+        builder.add_edge(node, END)
+
     return builder.compile()
 
 
