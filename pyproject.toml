@@ -1,0 +1,130 @@
+[project]
+name = "pgk_operativa"
+version = "0.1.0"
+description = "Super-agente PGK unificado. Ana unica, modulos tecnicos, 3 BDs inviolables, consenso opt-in."
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "Proprietary" }
+authors = [
+    { name = "Polska Grupa Konsultingowa S.L.", email = "info@pgkhiszpania.com" },
+]
+
+dependencies = [
+    # Core
+    "fastapi>=0.115,<0.120",
+    "uvicorn[standard]>=0.32,<0.40",
+    "pydantic>=2.9,<3",
+    "pydantic-settings>=2.6,<3",
+    "typer>=0.15,<0.20",
+    "rich>=13.9,<14",
+    # LangGraph / LangChain
+    "langgraph>=0.2.60,<0.3",
+    "langchain>=0.3.10,<0.4",
+    "langchain-core>=0.3.25,<0.4",
+    "langchain-openai>=0.2.14,<0.3",
+    "langchain-anthropic>=0.3,<0.4",
+    "langchain-google-genai>=2,<3",
+    # Persistence
+    "sqlalchemy>=2.0.35,<3",
+    "alembic>=1.14,<2",
+    "psycopg[binary]>=3.2,<4",
+    "sshtunnel>=0.4.0,<0.5",
+    "chromadb>=0.5.23,<0.6",
+    # LLM SDKs (direct)
+    "openai>=1.55,<2",
+    "anthropic>=0.40,<1",
+    "google-generativeai>=0.8,<0.9",
+    # Utilities
+    "tenacity>=9,<10",
+    "httpx>=0.27,<0.29",
+    "python-dotenv>=1.0.1,<2",
+    "orjson>=3.10,<4",
+    "structlog>=24.4,<25",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3,<9",
+    "pytest-asyncio>=0.24,<0.26",
+    "pytest-cov>=6,<7",
+    "ruff>=0.8,<0.15",
+    "mypy>=1.13,<2",
+    "pre-commit>=4,<5",
+    "types-requests",
+]
+
+[project.scripts]
+pgk = "pgk_operativa.cli.main:app"
+
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/pgk_operativa"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "UP",  # pyupgrade
+    "N",   # pep8-naming
+    "S",   # flake8-bandit
+    "C4",  # comprehensions
+    "PTH", # use-pathlib (enforce pathlib over os.path)
+    "RUF", # ruff-specific
+]
+ignore = [
+    "S101",  # assert (we use it in tests and in consenso guards)
+    "E501",  # line-too-long handled by formatter
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["S", "N802", "N806"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+disallow_untyped_defs = true
+no_implicit_optional = true
+
+[[tool.mypy.overrides]]
+module = ["sshtunnel.*", "chromadb.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+addopts = "-ra --strict-markers --strict-config"
+testpaths = ["tests"]
+asyncio_mode = "auto"
+markers = [
+    "integration: marca test que requiere recursos externos (BD, red, LLM)",
+    "slow: marca test lento",
+]
+
+[tool.coverage.run]
+source = ["src/pgk_operativa"]
+branch = true
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "\\.\\.\\.",
+]

@@ -1,0 +1,44 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-toml
+      - id: check-json
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: ["--maxkb=1024"]
+      - id: detect-private-key
+      - id: check-case-conflict
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.4
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+
+  - repo: local
+    hooks:
+      - id: no-em-dash
+        name: "Estilo PGK: prohibido em-dash"
+        entry: "\u2014"
+        language: pygrep
+        types: [text]
+        exclude: "^(\\.pre-commit-config\\.yaml|AGENTS\\.md|docs/ESTILO_PGK\\.md|archivo/)"
+
+      - id: no-hardcoded-users-path
+        name: "Rutas: prohibido /Users/ hardcoded"
+        entry: "/Users/[a-zA-Z]+"
+        language: pygrep
+        types: [python]
+        exclude: "^(\\.env\\.example|archivo/|tests/fixtures/)"
+
+      - id: no-hardcoded-home-path
+        name: "Rutas: prohibido /home/ubuntu hardcoded en codigo"
+        entry: "/home/[a-zA-Z]+/"
+        language: pygrep
+        types: [python]
+        exclude: "^(\\.env\\.example|archivo/|tests/fixtures/)"

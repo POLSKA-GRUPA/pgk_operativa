@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  lint-and-test:
+    name: Lint y tests (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12"]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Instalar uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+
+      - name: Setup Python
+        run: uv python install ${{ matrix.python-version }}
+
+      - name: Instalar dependencias
+        run: uv sync --all-extras --dev
+
+      - name: Ruff lint
+        run: uv run ruff check .
+
+      - name: Ruff format check
+        run: uv run ruff format --check .
+
+      - name: Mypy (solo src/, strict)
+        run: uv run mypy src/pgk_operativa
+        continue-on-error: true
+
+      - name: Pytest
+        run: uv run pytest -v --cov=pgk_operativa --cov-report=term-missing
+
+      - name: Estilo PGK (sin em-dash fuera de archivo/)
+        run: |
+          if grep -rn $'\u2014' --include='*.py' --include='*.md' \
+              --exclude-dir=archivo --exclude-dir=.git \
+              --exclude=AGENTS.md --exclude=ESTILO_PGK.md .; then
+            echo "Error: em-dash encontrado. Prohibido por estilo PGK."
+            exit 1
+          fi
+
+      - name: Rutas: sin /Users/ hardcoded en Python
+        run: |
+          if grep -rn "/Users/[a-zA-Z]" --include='*.py' \
+              --exclude-dir=archivo --exclude-dir=.git .; then
+            echo "Error: ruta hardcoded /Users/... encontrada."
+            exit 1
+          fi

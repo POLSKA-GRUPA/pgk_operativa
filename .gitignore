@@ -1,0 +1,100 @@
+# ===== Secretos =====
+.env
+.env.local
+.env.*.local
+*.key
+*.pem
+id_rsa*
+!id_rsa.pub.example
+credentials.json
+token.json
+*.sqlite
+*.sqlite3
+*.db
+!tests/fixtures/*.sqlite
+
+# ===== Python =====
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# ===== uv =====
+.venv/
+venv/
+env/
+ENV/
+.uv/
+uv.lock.backup
+
+# ===== Testing / Coverage =====
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+*.cover
+.hypothesis/
+.tox/
+.nox/
+
+# ===== Tipos / Lint =====
+.mypy_cache/
+.ruff_cache/
+.dmypy.json
+
+# ===== IDE =====
+.vscode/
+!.vscode/settings.shared.json
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# ===== Datos locales =====
+data/
+!data/.gitkeep
+logs/
+!logs/.gitkeep
+
+# ===== ChromaDB / Memorias =====
+data/vector_db/
+data/chroma/
+data/memoria/
+data/engram/
+
+# ===== Archivos temporales =====
+*.tmp
+*.bak
+*.old
+*.orig
+*.log
+*.pid
+.cache/
+
+# ===== Distribucion (tufup futuro) =====
+dist_repo/
+staging/
+
+# ===== Notebooks =====
+.ipynb_checkpoints/
+*.ipynb_convert/
