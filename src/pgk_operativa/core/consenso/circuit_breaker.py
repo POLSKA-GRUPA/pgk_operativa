@@ -67,10 +67,11 @@ class CircuitBreaker:
         snapshot sea coherente con la propiedad publica.
         """
         with self._lock:
-            esta_abierto = self._abierto_desde is not None
-            if esta_abierto:
+            abierto_desde = self._abierto_desde
+            esta_abierto = abierto_desde is not None
+            if abierto_desde is not None:
                 ahora = datetime.now(UTC)
-                if ahora - self._abierto_desde >= self._cooldown:
+                if ahora - abierto_desde >= self._cooldown:
                     self._abierto_desde = None
                     self._fallos.clear()
                     esta_abierto = False

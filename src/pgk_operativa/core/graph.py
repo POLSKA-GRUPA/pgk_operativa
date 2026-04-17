@@ -12,6 +12,7 @@ tendra logica propia (tools, RAG, motores deterministas, etc.).
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import cast
 from uuid import uuid4
@@ -30,7 +31,9 @@ from pgk_operativa.nodos.laboral import nodo_laboral
 from pgk_operativa.nodos.legal import nodo_legal
 from pgk_operativa.nodos.marketing import nodo_marketing
 
-_MODULE_NODES: dict[str, object] = {
+_ModuleNode = Callable[[dict[str, object]], dict[str, object]]
+
+_MODULE_NODES: dict[str, _ModuleNode] = {
     "fiscal": nodo_fiscal,
     "contable": nodo_contable,
     "laboral": nodo_laboral,
