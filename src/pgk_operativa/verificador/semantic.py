@@ -153,7 +153,11 @@ def run(manifest: Manifest, repo_root: Path, repos_root: Path) -> list[Finding]:
             )
             content = response.choices[0].message.content or ""
             data = _extract_json(content)
-        except (ValueError, OSError, RuntimeError) as exc:
+        except Exception as exc:  # pragma: no cover - red del LLM, auth, rate limit, etc.
+            # Capturamos Exception porque el SDK de OpenAI/Z.ai lanza subclases
+            # de openai.OpenAIError (APIError, RateLimitError, AuthenticationError,
+            # APITimeoutError) que no heredan de ValueError/OSError/RuntimeError.
+            # El verificador nunca debe crashear por un fallo de red del LLM.
             findings.append(
                 Finding(
                     check="semantic",
