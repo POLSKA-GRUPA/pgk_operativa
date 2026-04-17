@@ -14,6 +14,7 @@ from rich.table import Table
 
 from pgk_operativa import __version__
 from pgk_operativa.core.config import get_settings
+from pgk_operativa.core.graph import run as run_graph
 from pgk_operativa.core.llm import available_providers, default_config, pick_consensus_pair
 from pgk_operativa.core.paths import (
     REPO_ROOT,
@@ -46,11 +47,20 @@ def ana(
     ),
     nif: str | None = typer.Option(None, "--nif", help="NIF/NIE del cliente."),
     nombre: str | None = typer.Option(None, "--nombre", help="Nombre del cliente."),
+    debug: bool = typer.Option(
+        False,
+        "--debug",
+        help="Modo diagnostico: muestra modulo interno y razonamiento (uso tecnico).",
+    ),
 ) -> None:
     """Envia un mensaje a Ana.
 
     Por defecto Ana responde con 1 solo modelo (Z.ai GLM coding plan).
     Con `--consenso`, dispara 2 proveedores distintos (assert en runtime).
+
+    Ana es la unica cara visible: por defecto NO se exponen nombres de
+    modulos internos (fiscal, contable, laboral, legal, docs, marketing).
+    Usar `--debug` solo en desarrollo para inspeccionar el routing.
     """
     cfg = default_config()
     console.print(f"[bold cyan]Ana[/bold cyan] (default: {cfg.provider.value}/{cfg.model})")
@@ -59,7 +69,7 @@ def ana(
         if pair is None:
             console.print(
                 "[yellow]Aviso:[/yellow] solo 1 proveedor disponible. "
-                "Degradando a consensus_type=single_model."
+                "Consenso degradado a single_model."
             )
         else:
             a, b = pair
@@ -67,14 +77,23 @@ def ana(
                 f"[green]Consenso activo:[/green] "
                 f"{a.provider.value}/{a.model} vs {b.provider.value}/{b.model}"
             )
-    console.print(f"[dim]Cliente:[/dim] NIF={nif} Nombre={nombre}")
+    console.print(f"[dim]Cliente:[/dim] NIF={nif or '(sin nif)'} Nombre={nombre or '(sin nombre)'}")
     console.print(f"[dim]Mensaje:[/dim] {mensaje}")
     console.print()
-    console.print(
-        "[yellow]pgk ana aun no esta cableado al grafo.[/yellow] "
-        "Esta version es el esqueleto del CLI. "
-        "El router Ana se activa en Semana 1."
-    )
+
+    try:
+        resultado = run_graph(mensaje, nif=nif, nombre=nombre, consenso=consenso)
+    except RuntimeError as exc:
+        console.print(f"[red]Error de configuracion:[/red] {exc}")
+        raise typer.Exit(code=2) from exc
+
+    respuesta = resultado.get("respuesta_final", "(respuesta vacia)")
+    if debug:
+        modulo = resultado.get("modulo_tecnico", "general")
+        razon = resultado.get("clasificacion_razonamiento", "")
+        console.print(f"[dim]debug modulo={modulo} razon={razon}[/dim]")
+        console.print()
+    console.print(respuesta)
 
 
 @app.command()
