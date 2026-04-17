@@ -50,7 +50,9 @@ jobs:
       - name: Estilo PGK (sin em-dash fuera de archivo/)
         run: |
           if grep -rn $'\u2014' --include='*.py' --include='*.md' \
-              --exclude-dir=archivo --exclude-dir=.git \
+              --exclude-dir=archivo --exclude-dir=.git --exclude-dir=.venv \
+              --exclude-dir=node_modules --exclude-dir=.mypy_cache \
+              --exclude-dir=.pytest_cache --exclude-dir=.ruff_cache \
               --exclude=AGENTS.md --exclude=ESTILO_PGK.md .; then
             echo "Error: em-dash encontrado. Prohibido por estilo PGK."
             exit 1
@@ -59,7 +61,8 @@ jobs:
       - name: Rutas sin /Users/ hardcoded en Python
         run: |
           if grep -rn "/Users/[a-zA-Z]" --include='*.py' \
-              --exclude-dir=archivo --exclude-dir=.git .; then
+              --exclude-dir=archivo --exclude-dir=.git --exclude-dir=.venv \
+              --exclude-dir=node_modules .; then
             echo "Error: ruta hardcoded /Users/... encontrada."
             exit 1
           fi
