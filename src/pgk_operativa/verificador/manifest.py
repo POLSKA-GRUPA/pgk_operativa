@@ -132,8 +132,13 @@ class Manifest:
         """Carga un manifest desde disco y valida su estructura."""
         if not manifest_path.exists():
             raise FileNotFoundError(f"Manifest no encontrado: {manifest_path}")
-        with manifest_path.open("r", encoding="utf-8") as f:
-            data = yaml.safe_load(f)
+        try:
+            with manifest_path.open("r", encoding="utf-8") as f:
+                data = yaml.safe_load(f)
+        except yaml.YAMLError as exc:
+            # yaml.YAMLError (ScannerError, ParserError, ...) no hereda de ValueError.
+            # Lo envolvemos para que el CLI pueda capturarlo con su except estrecho.
+            raise ValueError(f"YAML invalido en {manifest_path}: {exc}") from exc
         if not isinstance(data, dict):
             raise ValueError(f"Manifest {manifest_path} debe ser un dict YAML")
 

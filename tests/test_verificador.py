@@ -109,6 +109,14 @@ def test_manifest_rejects_invalid_relacion(tmp_path: Path) -> None:
         Manifest.load(manifest_path)
 
 
+def test_manifest_rejects_malformed_yaml(tmp_path: Path) -> None:
+    """YAML sintacticamente invalido debe convertirse en ValueError, no crashear."""
+    manifest_path = tmp_path / "PR-9999.yaml"
+    manifest_path.write_text("pr: 1\n  bad: [indent\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="YAML invalido"):
+        Manifest.load(manifest_path)
+
+
 def _make_manifest(archivos: list[ArchivoManifest], pr: int = 99) -> Manifest:
     return Manifest(pr=pr, fecha="2026-04-17", titulo="Test", archivos=archivos)
 
