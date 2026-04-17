@@ -108,6 +108,10 @@ def test_graph_run_llm_failure_returns_graceful_message() -> None:
         ("modelo 210 IRNR", "fiscal"),
         ("asiento PGC deudor", "contable"),
         ("alta empleado seguridad social", "laboral"),
+        ("recurso alegaciones juzgado", "legal"),
+        ("borrador email plantilla cliente", "docs"),
+        ("campana SEO buyer persona landing", "marketing"),
+        ("revision de calidad verificar fuentes", "calidad"),
     ],
 )
 def test_graph_routes_to_correct_module(mensaje: str, modulo_esperado: str) -> None:

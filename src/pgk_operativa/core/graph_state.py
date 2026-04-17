@@ -35,8 +35,8 @@ class AnaState(TypedDict, total=False):
     """Estado del grafo conducido por Ana.
 
     Ana es la unica cara visible al empleado. Los modulos tecnicos
-    (fiscal, contable, laboral, legal, docs, marketing) son invisibles
-    por contrato: nunca se exponen al usuario final.
+    (fiscal, contable, laboral, legal, docs, marketing, calidad) son
+    invisibles por contrato: nunca se exponen al usuario final.
     """
 
     messages: Annotated[list[dict[str, str]], add_messages]

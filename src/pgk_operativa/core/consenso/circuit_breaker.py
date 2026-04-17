@@ -61,10 +61,21 @@ class CircuitBreaker:
             self._abierto_desde = None
 
     def estado(self) -> dict[str, object]:
-        """Snapshot del estado para telemetria (C.9)."""
+        """Snapshot del estado para telemetria (C.9).
+
+        Usa la misma logica de cooldown que `abierto` para que el
+        snapshot sea coherente con la propiedad publica.
+        """
         with self._lock:
+            esta_abierto = self._abierto_desde is not None
+            if esta_abierto:
+                ahora = datetime.now(UTC)
+                if ahora - self._abierto_desde >= self._cooldown:
+                    self._abierto_desde = None
+                    self._fallos.clear()
+                    esta_abierto = False
             return {
-                "abierto": self._abierto_desde is not None,
+                "abierto": esta_abierto,
                 "fallos_recientes": len(self._fallos),
                 "max_fallos": self._max_fallos,
                 "abierto_desde": (self._abierto_desde.isoformat() if self._abierto_desde else None),
