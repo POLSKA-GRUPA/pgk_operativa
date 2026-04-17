@@ -26,6 +26,7 @@ ModuloTecnico = Literal[
     "legal",
     "docs",
     "marketing",
+    "calidad",
     "general",
 ]
 
