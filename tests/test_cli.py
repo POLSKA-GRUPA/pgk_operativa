@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from unittest.mock import patch
+
 from typer.testing import CliRunner
 
 from pgk_operativa import __version__
@@ -22,13 +24,23 @@ def test_doctor_runs() -> None:
     assert "pgk_operativa doctor" in result.stdout
 
 
+def _fake_run_graph(mensaje: str, **_kwargs: object) -> dict[str, object]:
+    return {
+        "modulo_tecnico": "fiscal" if "fiscal" in mensaje.lower() else "general",
+        "clasificacion_razonamiento": "mock",
+        "respuesta_final": f"Respuesta simulada para: {mensaje}",
+    }
+
+
 def test_ana_without_consenso() -> None:
-    result = runner.invoke(app, ["ana", "hola"])
-    assert result.exit_code == 0
+    with patch("pgk_operativa.cli.main.run_graph", side_effect=_fake_run_graph):
+        result = runner.invoke(app, ["ana", "hola"])
+    assert result.exit_code == 0, result.stdout
     assert "Ana" in result.stdout
 
 
 def test_ana_with_consenso_flag() -> None:
-    result = runner.invoke(app, ["ana", "--consenso", "decision fiscal"])
-    assert result.exit_code == 0
+    with patch("pgk_operativa.cli.main.run_graph", side_effect=_fake_run_graph):
+        result = runner.invoke(app, ["ana", "--consenso", "decision fiscal"])
+    assert result.exit_code == 0, result.stdout
     assert "Ana" in result.stdout
