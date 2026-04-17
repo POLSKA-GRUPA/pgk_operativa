@@ -157,6 +157,17 @@ def test_llm_parser_accepts_module_with_trailing_text() -> None:
         assert "es fiscal" in razon
 
 
+def test_nodo_ana_router_survives_llm_exception() -> None:
+    """Si el LLM revienta (timeout, 5xx), el nodo no tira, rutea a 'general'."""
+    state = {"mensaje_usuario": "algo completamente ambiguo sin keywords claras"}
+    with patch.object(router, "clasificar", side_effect=RuntimeError("boom: API 503")):
+        resultado = router.nodo_ana_router(state)
+    assert resultado["modulo_tecnico"] == "general"
+    assert "error clasificacion" in resultado["clasificacion_razonamiento"]
+    assert resultado["audit_trail"][0]["evento"] == "clasificacion_error"
+    assert resultado["audit_trail"][0]["error_tipo"] == "RuntimeError"
+
+
 def test_llm_parser_accepts_module_with_dash_suffix() -> None:
     """MODULO: fiscal - AEAT debe parsear fiscal."""
     fake_resp = type(

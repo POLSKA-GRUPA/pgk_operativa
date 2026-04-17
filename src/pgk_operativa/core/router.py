@@ -232,7 +232,26 @@ def nodo_ana_router(state: AnaState) -> dict[str, object]:
             ],
         }
 
-    modulo, razon = clasificar(mensaje)
+    try:
+        modulo, razon = clasificar(mensaje)
+    except Exception as exc:
+        # Si el LLM falla (timeout, 5xx, rate limit, red), no tiramos el grafo.
+        # Ruteamos a 'general' y el ejecutor respondera de forma generica.
+        return {
+            "modulo_tecnico": "general",
+            "clasificacion_razonamiento": (
+                f"error clasificacion ({type(exc).__name__}): fallback a general"
+            ),
+            "audit_trail": [
+                {
+                    "nodo": "ana_router",
+                    "evento": "clasificacion_error",
+                    "error_tipo": type(exc).__name__,
+                    "error_msg": str(exc)[:200],
+                    "decision": "general",
+                }
+            ],
+        }
     return {
         "modulo_tecnico": modulo,
         "clasificacion_razonamiento": razon,
