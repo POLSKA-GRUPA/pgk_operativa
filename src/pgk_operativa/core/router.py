@@ -118,6 +118,15 @@ _KEYWORDS: dict[str, list[str]] = {
         "landing",
         "copywriting",
     ],
+    "calidad": [
+        "revision de calidad",
+        "verificar respuesta",
+        "control calidad",
+        "qa",
+        "revisar citas",
+        "verificar fuentes",
+        "auditar respuesta",
+    ],
 }
 
 
@@ -176,10 +185,11 @@ _LLM_CLASSIFIER_PROMPT = """Eres el router de un despacho fiscal espanol. Clasif
 - legal: derecho, sentencias, procedimientos judiciales, contratos civiles/mercantiles, escrituras
 - docs: redaccion de borradores, emails, plantillas, traducciones para cliente
 - marketing: SEO, campanas, contenido, redes sociales, captacion
+- calidad: revision de respuestas, verificacion de fuentes, control de calidad, QA
 - general: cualquier otra cosa (saludos, preguntas fuera de dominio)
 
 Responde UNICAMENTE con una linea en formato:
-MODULO: <uno de los 7>
+MODULO: <uno de los 8>
 RAZON: <10 palabras max>
 
 Mensaje del empleado:

@@ -1,4 +1,4 @@
-"""Tests del grafo LangGraph minimo de Semana 1."""
+"""Tests del grafo LangGraph: Semana 1 regresion + Semana 2 routing condicional."""
 
 from __future__ import annotations
 
@@ -61,7 +61,7 @@ def test_graph_run_end_to_end_mocked() -> None:
         chat = _MockChat()
 
     with patch(
-        "pgk_operativa.nodos.ejecutor.build_openai_client",
+        "pgk_operativa.nodos._base.build_openai_client",
         return_value=(_MockClient(), "glm-4.6"),
     ):
         resultado = graph_module.run(
@@ -93,7 +93,7 @@ def test_graph_run_llm_failure_returns_graceful_message() -> None:
         chat = _ExplodingChat()
 
     with patch(
-        "pgk_operativa.nodos.ejecutor.build_openai_client",
+        "pgk_operativa.nodos._base.build_openai_client",
         return_value=(_ExplodingClient(), "glm-4.6"),
     ):
         resultado = graph_module.run("declaracion trimestral 303")
@@ -108,6 +108,10 @@ def test_graph_run_llm_failure_returns_graceful_message() -> None:
         ("modelo 210 IRNR", "fiscal"),
         ("asiento PGC deudor", "contable"),
         ("alta empleado seguridad social", "laboral"),
+        ("recurso alegaciones juzgado", "legal"),
+        ("borrador email plantilla cliente", "docs"),
+        ("campana SEO buyer persona landing", "marketing"),
+        ("revision de calidad verificar fuentes", "calidad"),
     ],
 )
 def test_graph_routes_to_correct_module(mensaje: str, modulo_esperado: str) -> None:
@@ -133,7 +137,7 @@ def test_graph_routes_to_correct_module(mensaje: str, modulo_esperado: str) -> N
                     )()
 
     with patch(
-        "pgk_operativa.nodos.ejecutor.build_openai_client",
+        "pgk_operativa.nodos._base.build_openai_client",
         return_value=(_StubClient(), "glm-4.6"),
     ):
         resultado = graph_module.run(mensaje)
