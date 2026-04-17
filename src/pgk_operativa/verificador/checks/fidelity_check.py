@@ -96,7 +96,7 @@ def run(manifest: Manifest, repo_root: Path, repos_root: Path) -> list[Finding]:
                     )
                 )
             else:
-                total_lines = source_content.count("\n") + 1
+                total_lines = len(source_content.splitlines())
                 if rango[1] > total_lines:
                     findings.append(
                         Finding(

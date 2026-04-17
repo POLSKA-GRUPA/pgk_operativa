@@ -193,7 +193,8 @@ def verificar(
 
     Exit codes:
     - 0: sin hallazgos CRITICAL.
-    - 2: al menos un hallazgo CRITICAL (bloquea merge).
+    - 2: al menos un hallazgo CRITICAL (bloquea merge), o error de carga
+      del manifest cuando no hay hallazgos de mayor prioridad.
     - 3: con --bloquear-high, al menos un hallazgo HIGH.
     """
     rr = repos_root or default_repos_root()
@@ -247,11 +248,14 @@ def verificar(
             any_high = True
 
     # Prioridad explicita: CRITICAL > HIGH (cuando --bloquear-high) > error de carga > OK.
-    # Jamas enmascarar CRITICAL con un codigo mayor.
-    if any_critical or any_load_error:
+    # Jamas enmascarar CRITICAL con un codigo mayor. Error de carga es la prioridad
+    # mas baja entre las fallas: solo reporta exit 2 si no hubo HIGH con bloqueo activo.
+    if any_critical:
         raise typer.Exit(code=2)
     if bloquear_high and any_high:
         raise typer.Exit(code=3)
+    if any_load_error:
+        raise typer.Exit(code=2)
 
 
 @app.command("admin-alta")
