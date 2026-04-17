@@ -1,0 +1,26 @@
+pr: 3
+fecha: "2026-04-16"
+titulo: "HANDOFF manual para la socia + fix router normalizacion diacriticos"
+archivos:
+  - target: HANDOFF.md
+    relacion: nuevo
+    notas: |
+      Manual operativo completo (1136 lineas, 25 secciones). ULTRAPLAN v1.8
+      integrado. Escrito desde cero como documento de traspaso. No es copia
+      de ningun repo origen.
+
+  - target: src/pgk_operativa/core/router.py
+    relacion: adaptado
+    origen:
+      repo: PGK_Empresa_Autonoma
+      path: src/core/routing.py
+    notas: |
+      Amplia el router de PR #2: anade _normalize() con NFKD para que
+      keywords como "retencion", "nomina", "cotizacion" clasifiquen bien
+      aunque vengan con tildes/acentos. El LLM solo entra como fallback.
+
+  - target: tests/test_router.py
+    relacion: nuevo
+    notas: |
+      7 tests parametricos anadidos (retencion, nomina, cotizacion,
+      amortizacion, conciliacion, declaracion, campana). Total 55/55 tests.

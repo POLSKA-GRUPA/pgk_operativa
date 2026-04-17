@@ -1,0 +1,59 @@
+pr: 1
+fecha: "2026-04-15"
+titulo: "Scaffolding Dia 0 + fix CI (YAML + repo publico + exclusiones)"
+archivos:
+  # Scaffolding: estructura basica del repo, todo NUEVO al no haber origen directo.
+  - target: pyproject.toml
+    relacion: nuevo
+    notas: |
+      Proyecto Python 3.12, uv, ruff, mypy strict, pytest. Diseno propio
+      siguiendo AGENTS.md y el CONSOLIDADO v20.
+
+  - target: src/pgk_operativa/__init__.py
+    relacion: nuevo
+    notas: Paquete raiz. Solo expone __version__.
+
+  - target: src/pgk_operativa/core/paths.py
+    relacion: nuevo
+    notas: |
+      Utilidad portabilidad: REPO_ROOT computado con Path(__file__).resolve(),
+      nunca hardcoded. Regla 4 de AGENTS.md.
+
+  - target: src/pgk_operativa/core/config.py
+    relacion: nuevo
+    notas: |
+      Settings con pydantic-settings, lee .env. has_zai(), has_anthropic(),
+      etc. Indicadores booleanos de proveedores.
+
+  - target: src/pgk_operativa/core/llm.py
+    relacion: nuevo
+    notas: |
+      Factory de proveedores LLM. Z.ai GLM-4.6 default via OpenAI SDK.
+      pick_consensus_pair() verifica provider_A != provider_B.
+
+  - target: src/pgk_operativa/cli/main.py
+    relacion: nuevo
+    notas: |
+      CLI typer. Subcomandos iniciales: ana, doctor, version, admin-alta.
+
+  - target: .github/workflows/ci.yml
+    relacion: nuevo
+    notas: |
+      Workflow Actions: lint + format check + mypy + pytest + scan em-dash
+      y /Users/. Exit code 1 si detecta estilo fuera de PGK.
+
+  - target: AGENTS.md
+    relacion: nuevo
+    notas: |
+      Reglas de oro del repo. 8 reglas no negociables. Fuente de verdad
+      para agentes IA que trabajan en el repo.
+
+  - target: README.md
+    relacion: nuevo
+    notas: Punto de entrada. Onboarding rapido, enlaces al HANDOFF y CONSOLIDADO.
+
+  - target: archivo/README.md
+    relacion: nuevo
+    notas: |
+      Regla 1 de AGENTS.md: nada se borra. archivo/ hereda el rol que
+      otros repos tendrian como legacy/.

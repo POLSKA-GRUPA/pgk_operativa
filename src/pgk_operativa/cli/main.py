@@ -8,6 +8,8 @@ Subcomandos iniciales (esqueleto):
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import typer
 from rich.console import Console
 from rich.table import Table
@@ -22,6 +24,9 @@ from pgk_operativa.core.paths import (
     engram_path,
     memoria_operativa_path,
 )
+from pgk_operativa.verificador.auditor import audit, default_repos_root, informes_dir
+from pgk_operativa.verificador.manifest import Manifest, list_manifests, manifests_dir
+from pgk_operativa.verificador.report import Severity
 
 app = typer.Typer(
     help="pgk_operativa: super-agente unificado PGK.",
@@ -152,6 +157,95 @@ def doctor() -> None:
         )
 
     console.print(table)
+
+
+@app.command()
+def verificar(
+    pr: int | None = typer.Option(
+        None, "--pr", help="Numero de PR a auditar. Si se omite, auditar --all."
+    ),
+    todos: bool = typer.Option(False, "--all", help="Audita todos los manifests disponibles."),
+    repos_root: Path | None = typer.Option(
+        None,
+        "--repos-root",
+        help="Directorio raiz de repos origen. Default: ~/repos/.",
+        exists=False,
+    ),
+    salida: Path | None = typer.Option(
+        None,
+        "--salida",
+        help="Directorio destino de informes. Default: informes/auditoria/.",
+    ),
+    bloquear_high: bool = typer.Option(
+        False,
+        "--bloquear-high",
+        help="Sale con codigo 3 si hay HIGH (ademas del 2 por CRITICAL).",
+    ),
+    semantico: bool = typer.Option(
+        False,
+        "--semantico",
+        help="Anade check LLM (Z.ai GLM-4.6) que compara origen con destino. Coste extra.",
+    ),
+) -> None:
+    """Auditor hacia atras: verifica fidelidad de un PR contra su manifest.
+
+    Genera informe Markdown en `informes/auditoria/PR-XXXX.md`.
+
+    Exit codes:
+    - 0: sin hallazgos CRITICAL.
+    - 2: al menos un hallazgo CRITICAL (bloquea merge).
+    - 3: con --bloquear-high, al menos un hallazgo HIGH.
+    """
+    rr = repos_root or default_repos_root()
+    out_dir = salida or informes_dir()
+
+    if pr is not None and todos:
+        console.print("[red]Error:[/red] --pr y --all son mutuamente excluyentes.")
+        raise typer.Exit(code=2)
+
+    if pr is None and not todos:
+        console.print("[yellow]Uso:[/yellow] pgk verificar --pr N  |  pgk verificar --all")
+        raise typer.Exit(code=2)
+
+    manifests: list[Path]
+    if pr is not None:
+        manifests = [manifests_dir() / f"PR-{pr:04d}.yaml"]
+    else:
+        manifests = list_manifests()
+        if not manifests:
+            console.print(f"[yellow]No hay manifests en {manifests_dir()}.[/yellow]")
+            raise typer.Exit(code=0)
+
+    worst_exit = 0
+    for manifest_path in manifests:
+        try:
+            manifest = Manifest.load(manifest_path)
+        except (FileNotFoundError, ValueError) as exc:
+            console.print(f"[red]Error leyendo {manifest_path.name}:[/red] {exc}")
+            worst_exit = max(worst_exit, 2)
+            continue
+
+        report = audit(manifest, repo_root=REPO_ROOT, repos_root=rr, semantico=semantico)
+        out_path = out_dir / f"PR-{manifest.pr:04d}.md"
+        report.save(out_path)
+
+        table = Table(title=f"PR #{manifest.pr:04d} - {manifest.titulo}", show_header=True)
+        table.add_column("Severidad")
+        table.add_column("N")
+        for sev in (Severity.CRITICAL, Severity.HIGH, Severity.MEDIUM, Severity.LOW):
+            n = len(report.by_severity(sev))
+            color = {"CRITICAL": "red", "HIGH": "yellow", "MEDIUM": "cyan", "LOW": "dim"}[sev.label]
+            table.add_row(f"[{color}]{sev.label}[/{color}]", str(n))
+        console.print(table)
+        console.print(f"[dim]Informe: {out_path}[/dim]")
+
+        if report.has_critical:
+            worst_exit = max(worst_exit, 2)
+        if bloquear_high and report.has_high:
+            worst_exit = max(worst_exit, 3)
+
+    if worst_exit != 0:
+        raise typer.Exit(code=worst_exit)
 
 
 @app.command("admin-alta")

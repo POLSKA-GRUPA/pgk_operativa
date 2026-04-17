@@ -1,0 +1,80 @@
+pr: 2
+fecha: "2026-04-16"
+titulo: "Semana 1 - Grafo minimo con Ana router y ejecutor generico"
+archivos:
+  - target: src/pgk_operativa/core/graph_state.py
+    relacion: inspirado
+    origen:
+      repo: PGK_Empresa_Autonoma
+      path: src/core/state.py
+      simbolos: ["PGKNegocioState"]
+    notas: |
+      Estado tipado con TypedDict. Version minimizada de PGKNegocioState
+      del origen (solo campos necesarios para Semana 1: mensaje,
+      modulo_destino, audit_trail, respuesta). Se ampliara en Semana 3.
+
+  - target: src/pgk_operativa/core/router.py
+    relacion: adaptado
+    origen:
+      repo: PGK_Empresa_Autonoma
+      path: src/core/routing.py
+    notas: |
+      Router Ana que clasifica entre modulos (fiscal, contable, legal,
+      laboral, marketing, docs, calidad, general). Dos capas:
+      (1) keywords normalizados con NFKD; (2) fallback a LLM Z.ai.
+      Adaptado: en el origen se mapea a agentes con nombre (Gran Dragon,
+      Edu, German). Aqui se enruta a modulo tecnico, Ana es la unica cara
+      visible (regla 2 AGENTS.md).
+
+  - target: src/pgk_operativa/core/graph.py
+    relacion: inspirado
+    origen:
+      repo: PGK_Empresa_Autonoma
+      path: src/graphs/main_graph.py
+    notas: |
+      StateGraph con LangGraph. Nodo router Ana -> nodo ejecutor generico.
+      Version minima: 1 solo nodo ejecutor (se descompone en PR #4).
+
+  - target: src/pgk_operativa/nodos/ejecutor.py
+    relacion: adaptado
+    origen:
+      repo: PGK_Empresa_Autonoma
+      path: src/agents/nodos.py
+      simbolos: ["nodo_gran_dragon", "nodo_edu", "nodo_paloma"]
+    notas: |
+      Ejecutor generico que carga prompt segun modulo_destino y delega al
+      LLM. Adaptado: en el origen hay 7 nodos separados con personalidades
+      (Gran Dragon/Edu/Jennifer/Mark/German/Paloma/Cecilia). Aqui uno solo
+      que selecciona prompt por modulo.
+
+  - target: src/pgk_operativa/nodos/prompts.py
+    relacion: nuevo
+    notas: |
+      Cargador de prompts por modulo. Los prompts reales de PGK_Empresa_Autonoma/
+      prompts/core/ no se copian en Semana 1; se integran en Semana 3.
+
+  - target: src/pgk_operativa/nodos/__init__.py
+    relacion: nuevo
+    notas: Paquete nodos. Solo exporta ejecutor en Semana 1.
+
+  - target: src/pgk_operativa/cli/main.py
+    relacion: adaptado
+    origen:
+      repo: PGK_Empresa_Autonoma
+      path: src/graphs/main_graph_runner.py
+    notas: |
+      Subcomando `pgk ana "<mensaje>"` invoca el grafo. Adaptado: el origen
+      tiene --nif/--nombre/--thread; aqui version minima sin esos campos.
+      Semana 3 los anadira cuando entre fichaje de casos reales.
+
+  - target: tests/test_router.py
+    relacion: nuevo
+    notas: Tests router por keywords + fallback LLM mockeado.
+
+  - target: tests/test_graph.py
+    relacion: nuevo
+    notas: Tests end-to-end del grafo minimo con LLM mockeado.
+
+  - target: tests/test_cli.py
+    relacion: nuevo
+    notas: Tests CLI con run_graph mockeado (no depende de red).
