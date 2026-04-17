@@ -169,7 +169,13 @@ def run(manifest: Manifest, repo_root: Path, repos_root: Path) -> list[Finding]:
             )
             continue
 
-        preserva = bool(data.get("preserva_intencion", True))
+        preserva_raw = data.get("preserva_intencion", True)
+        # Algunos modelos devuelven "false"/"no"/"0" como string en vez de bool.
+        # bool("false") es True en Python (string no vacio), silenciando el finding.
+        if isinstance(preserva_raw, bool):
+            preserva = preserva_raw
+        else:
+            preserva = str(preserva_raw).strip().lower() not in ("false", "no", "0", "")
         if preserva:
             continue
 
