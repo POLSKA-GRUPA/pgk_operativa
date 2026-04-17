@@ -173,7 +173,7 @@ ADR-006 fija tres BDs. No hay una cuarta. Si aparece la necesidad de un cuarto a
 
 ### 3.2 memoria_operativa.db (SQLite local)
 
-- Path: `<repo>/data/memoria_operativa.db`.
+- Path: `<repo>/data/memoria/memoria_operativa.db` en modo dev. Configurable via `PGK_DATA_ROOT` y, en modo wheel, cae a `~/.local/share/pgk_operativa/memoria/memoria_operativa.db`. La resolución exacta vive en `memoria_operativa_path()` de `src/pgk_operativa/core/paths.py`.
 - Contenido: memoria de negocio de los nodos LangGraph. Cada nodo guarda aprendizajes, decisiones y contexto relevante al cierre de un caso.
 - API: `src/pgk_operativa/core/memoria_operativa.py` (a construir en Semana 2-3).
 - FTS5 para busqueda semántica ligera + Bayesian updating para pesos de decisiones.
@@ -214,20 +214,25 @@ Patron obligatorio (implementado ya en `src/pgk_operativa/core/paths.py`):
 ```python
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
-SRC_ROOT = REPO_ROOT / "src" / "pgk_operativa"
-DATA_ROOT = REPO_ROOT / "data"
-DOCS_ROOT = REPO_ROOT / "docs"
-ARCHIVO_ROOT = REPO_ROOT / "archivo"
+REPO_ROOT = Path(__file__).resolve().parents[3]
+SRC_DIR = REPO_ROOT / "src"
+DOCS_DIR = REPO_ROOT / "docs"
+ARCHIVO_DIR = REPO_ROOT / "archivo"
+
+def data_root() -> Path:
+    """REPO_ROOT/data en dev, ~/.local/share/pgk_operativa en modo wheel.
+    Respeta PGK_DATA_ROOT si está definida.
+    """
+    ...
 
 def memoria_operativa_path() -> Path:
-    return DATA_ROOT / "memoria_operativa.db"
+    return data_root() / "memoria" / "memoria_operativa.db"
 ```
 
 Cualquier otro módulo importa desde aquí:
 
 ```python
-from pgk_operativa.core.paths import DATA_ROOT, memoria_operativa_path
+from pgk_operativa.core.paths import data_root, memoria_operativa_path
 ```
 
 ### 5.2 Lo prohibido
