@@ -17,7 +17,14 @@ from pgk_operativa.nodos.prompts import build_system_prompt
 
 
 def _invocar_llm(system_prompt: str, mensaje_usuario: str) -> str:
-    """Llamada unica a Z.ai GLM-4.6 via OpenAI SDK."""
+    """Llamada unica a Z.ai GLM-4.6 via OpenAI SDK.
+
+    GLM-4.6 es un modelo de razonamiento: consume tokens en
+    `reasoning_content` antes de emitir `content`. Si `max_tokens` es
+    bajo, el razonamiento ocupa todo el presupuesto y `content` queda
+    vacio. Usamos un techo amplio para dejar espacio al razonamiento y
+    a la respuesta final.
+    """
     client, model = build_openai_client()
     resp = client.chat.completions.create(
         model=model,
@@ -26,9 +33,19 @@ def _invocar_llm(system_prompt: str, mensaje_usuario: str) -> str:
             {"role": "user", "content": mensaje_usuario},
         ],
         temperature=0.2,
-        max_tokens=1024,
+        max_tokens=4096,
     )
-    return (resp.choices[0].message.content or "").strip()
+    content = (resp.choices[0].message.content or "").strip()
+    if content:
+        return content
+    reasoning = getattr(resp.choices[0].message, "reasoning_content", None) or ""
+    reasoning = reasoning.strip()
+    if reasoning:
+        return (
+            "No he podido redactar una respuesta final dentro del limite de tokens. "
+            "Reintenta el mensaje o pide que lo resuma."
+        )
+    return "(respuesta vacia)"
 
 
 def nodo_ejecutor(state: AnaState) -> dict[str, object]:
