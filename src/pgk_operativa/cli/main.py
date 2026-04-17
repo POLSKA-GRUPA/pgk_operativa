@@ -216,13 +216,15 @@ def verificar(
             console.print(f"[yellow]No hay manifests en {manifests_dir()}.[/yellow]")
             raise typer.Exit(code=0)
 
-    worst_exit = 0
+    any_critical = False
+    any_high = False
+    any_load_error = False
     for manifest_path in manifests:
         try:
             manifest = Manifest.load(manifest_path)
         except (FileNotFoundError, ValueError) as exc:
             console.print(f"[red]Error leyendo {manifest_path.name}:[/red] {exc}")
-            worst_exit = max(worst_exit, 2)
+            any_load_error = True
             continue
 
         report = audit(manifest, repo_root=REPO_ROOT, repos_root=rr, semantico=semantico)
@@ -240,12 +242,16 @@ def verificar(
         console.print(f"[dim]Informe: {out_path}[/dim]")
 
         if report.has_critical:
-            worst_exit = max(worst_exit, 2)
-        if bloquear_high and report.has_high:
-            worst_exit = max(worst_exit, 3)
+            any_critical = True
+        if report.has_high:
+            any_high = True
 
-    if worst_exit != 0:
-        raise typer.Exit(code=worst_exit)
+    # Prioridad explicita: CRITICAL > HIGH (cuando --bloquear-high) > error de carga > OK.
+    # Jamas enmascarar CRITICAL con un codigo mayor.
+    if any_critical or any_load_error:
+        raise typer.Exit(code=2)
+    if bloquear_high and any_high:
+        raise typer.Exit(code=3)
 
 
 @app.command("admin-alta")

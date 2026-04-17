@@ -38,7 +38,7 @@ class Finding:
 
 @dataclass
 class Report:
-    """Informe de auditoria de un PR."""
+    """Informe de auditoría de un PR."""
 
     pr: int
     titulo: str
@@ -66,11 +66,11 @@ class Report:
 
     def to_markdown(self) -> str:
         lines: list[str] = [
-            f"# Auditoria PR #{self.pr:04d}",
+            f"# Auditoría PR #{self.pr:04d}",
             "",
-            f"**Titulo**: {self.titulo}",
+            f"**Título**: {self.titulo}",
             "",
-            f"**Fecha auditoria**: {self.fecha_auditoria}",
+            f"**Fecha auditoría**: {self.fecha_auditoria}",
             "",
             "## Resumen",
             "",
