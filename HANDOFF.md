@@ -164,7 +164,7 @@ ADR-006 fija tres BDs. No hay una cuarta. Si aparece la necesidad de un cuarto a
 ### 3.1 pgk_database (Postgres remoto)
 
 - Servidor: 209.74.72.83, puerto 5432, schema `pgk_admin`.
-- Acceso: via tunel SSH. Kenyi tiene la clave; cada empleado recibe un rol propio (`emp_<nombre>_<hash>`).
+- Acceso: via tunel SSH. Kenyi tiene la clave; cada empleado recibe un rol propio (`emp_<slug>_<uuid4>`).
 - Contenido: tablas de negocio (`clientes_pgk`, `expedientes_pgk`, `facturas_pgk`, `tareas`, `fichajes`, `audit_log`, `procedimientos_pgk`, `plazos_aeat_clientes`, etc.).
 - Autoridad: única fuente de verdad de datos de negocio operativos.
 - Migraciones: Alembic. Nunca `ALTER TABLE` directo.
@@ -491,7 +491,7 @@ Un email enviado no se puede retirar. Un borrador si. Incluso con IA impecable, 
 | Acceso | Quien lo provisiona | Estado |
 |---|---|---|
 | Clave SSH autorizada en 209.74.72.83 | Kenyi | Pendiente para la socia |
-| Rol Postgres propio (`emp_socia_<hash>`) | Kenyi via admin_empleados.py | Pendiente |
+| Rol Postgres propio (`emp_<slug>_<uuid4>`) | Kenyi via admin_empleados.py | Pendiente |
 | `ZAI_API_KEY` en `.env` | Kenyi | En su `.env` maestro |
 | Resto de claves LLM (opcional, solo si usa consenso) | Kenyi | En su `.env` maestro |
 | Credenciales IMAP de al menos una cuenta | Kenyi | En su `.env` maestro |
@@ -850,8 +850,8 @@ Servidor PGK (209.74.72.83) -- unica fuente de verdad
 $ python admin_empleados.py alta \
     --email socia@pgkhiszpania.com \
     --nombre "Maria Socia"
-  Rol Postgres creado: emp_socia_a3f9
-  Usuario SSH en servidor: emp_socia_a3f9
+  Rol Postgres creado: emp_socia_7b2f4c91-3a8e-4d67-b5c1-9f2e8d3a1b4c
+  Usuario SSH en servidor: emp_socia_7b2f4c91-3a8e-4d67-b5c1-9f2e8d3a1b4c
   .env.age generado y subido
   Comando para WhatsApp generado
 ```
