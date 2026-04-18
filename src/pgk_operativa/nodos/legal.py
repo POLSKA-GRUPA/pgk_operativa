@@ -10,7 +10,8 @@ Alcance actual (Paso 5, Semana 3):
   - `analisis_legal_basico`: dict de fallback si el LLM falla.
   - `extraer_fuentes_legales`: referencias a Ley, BOE, RD, Codigo Civil,
     LEC, LGT, STS, STSJ, STC, etc.
-- `nodo_legal` enriquece la salida con `fuentes_legales`.
+- `nodo_legal` enriquece la salida con `fuentes_citadas` (clave uniforme
+    entre modulos fiscal/contable/legal).
 
 Origen (auditoria hacia atras):
 PGK_Empresa_Autonoma/src/agents/nodos.py, funciones:
@@ -92,7 +93,7 @@ def nodo_legal(state: dict[str, object]) -> dict[str, object]:
     """
     resultado = ejecutar_modulo("legal", state)
     respuesta = str(resultado.get("respuesta_tecnica", ""))
-    resultado["fuentes_legales"] = extraer_fuentes_legales(respuesta)
+    resultado["fuentes_citadas"] = extraer_fuentes_legales(respuesta)
     return resultado
 
 
