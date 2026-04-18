@@ -143,9 +143,7 @@ def test_graph_preserves_enrichment_fields_fiscal() -> None:
     fuentes = resultado.get("fuentes_citadas", [])
     recomendaciones = resultado.get("recomendaciones", [])
     assert isinstance(fuentes, list), "fuentes_citadas debe sobrevivir al merge del grafo"
-    assert isinstance(recomendaciones, list), (
-        "recomendaciones debe sobrevivir al merge del grafo"
-    )
+    assert isinstance(recomendaciones, list), "recomendaciones debe sobrevivir al merge del grafo"
     assert len(fuentes) > 0, "el helper extrae al menos una fuente del texto simulado"
     assert len(recomendaciones) > 0, (
         "el helper extrae al menos una recomendacion del texto simulado"
