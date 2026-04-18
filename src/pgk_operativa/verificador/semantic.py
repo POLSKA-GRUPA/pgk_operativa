@@ -162,11 +162,15 @@ def run(manifest: Manifest, repo_root: Path, repos_root: Path) -> list[Finding]:
         )
 
         try:
+            # timeout explicito: sin esto la SDK de OpenAI usa 600s (10 min)
+            # por llamada, y un auditor con N archivos podria colgarse N*10min
+            # si el proveedor se degrada. 30s cubre el caso normal con margen.
             response = client.chat.completions.create(
                 model=model,
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.0,
                 max_tokens=512,
+                timeout=30.0,
             )
             content = response.choices[0].message.content or ""
             data = _extract_json(content)

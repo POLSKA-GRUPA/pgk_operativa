@@ -26,14 +26,18 @@ Relaciones:
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from enum import Enum
-from pathlib import Path, PurePosixPath
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import cast
 
 import yaml
 
 from pgk_operativa.core.paths import REPO_ROOT
+
+# Matchea PR-0001.yaml, PR-9999.yaml. Rechaza PR-abc.yaml, PR-1.yaml, PR-00001.yaml.
+_PR_MANIFEST_FILENAME = re.compile(r"^PR-\d{4}\.yaml$")
 
 
 class Relacion(str, Enum):
@@ -52,11 +56,22 @@ def _reject_escaping_path(label: str, raw: str) -> None:
     resolveria FUERA del repo destino, y los checks `exists()` apuntarian
     a archivos ajenos al proyecto, produciendo findings enganosos.
     Analogamente para `origen.path` y `origen.repo`.
+
+    Validacion cross-platform: evaluamos la ruta como PurePosixPath y
+    PureWindowsPath porque un manifest editado en Windows podria escribir
+    `src\\..\\..\\etc\\passwd`, que PurePosixPath trata como un unico
+    segmento literal (no detecta el `..`) pero PureWindowsPath si descompone
+    correctamente.
     """
-    p = PurePosixPath(raw)
-    if p.is_absolute() or raw.startswith(("/", "\\")):
+    # tambien rechazamos NUL bytes: en POSIX cortan la ruta y en Windows
+    # lanzan OSError al abrir, silenciando el path real.
+    if "\x00" in raw:
+        raise ValueError(f"{label} contiene NUL byte, got {raw!r}")
+    posix = PurePosixPath(raw)
+    win = PureWindowsPath(raw)
+    if posix.is_absolute() or win.is_absolute() or raw.startswith(("/", "\\")):
         raise ValueError(f"{label} debe ser ruta relativa, got {raw!r}")
-    if ".." in p.parts:
+    if ".." in posix.parts or ".." in win.parts:
         raise ValueError(f"{label} no puede contener '..' (path traversal), got {raw!r}")
 
 
@@ -219,8 +234,16 @@ def manifests_dir() -> Path:
 
 
 def list_manifests(manifests_dir_override: Path | None = None) -> list[Path]:
-    """Lista todos los manifests disponibles, ordenados por nombre."""
+    """Lista manifests con nombre canonico ``PR-NNNN.yaml``.
+
+    El glob `PR-*.yaml` matchea tambien `PR-foo.yaml`, `PR-.yaml`,
+    `PR-1.yaml` o `PR-0001.yaml.bak` (no, pero ilustra el punto): cualquier
+    nombre no canonico explotaria al llamar `load_by_pr_number` con un
+    error confuso (`ValueError: invalid literal for int()`). Filtramos por
+    regex estricto para que `list_manifests()` devuelva SOLO archivos que
+    `Manifest.load()` puede parsear limpiamente.
+    """
     base = manifests_dir_override or manifests_dir()
     if not base.exists():
         return []
-    return sorted(base.glob("PR-*.yaml"))
+    return sorted(p for p in base.glob("PR-*.yaml") if _PR_MANIFEST_FILENAME.match(p.name))

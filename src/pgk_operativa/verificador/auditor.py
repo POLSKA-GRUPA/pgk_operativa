@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 
 from pgk_operativa.core.paths import REPO_ROOT
 from pgk_operativa.verificador import checks, semantic
 from pgk_operativa.verificador.manifest import Manifest
-from pgk_operativa.verificador.report import Report
+from pgk_operativa.verificador.report import Finding, Report, Severity
+
+CheckRunner = Callable[[Manifest, Path, Path], list[Finding]]
 
 
 def default_repos_root() -> Path:
@@ -39,24 +42,53 @@ def audit(
         fecha_auditoria=datetime.now(UTC).isoformat(timespec="seconds"),
     )
 
-    runners = [
-        checks.targets_check,
-        checks.lines_check,
-        checks.shell_check,
-        checks.imports_check,
-        checks.todo_check,
-        checks.tests_check,
-        checks.fidelity_check,
+    runners: list[tuple[str, CheckRunner]] = [
+        ("targets", checks.targets_check),
+        ("lines", checks.lines_check),
+        ("shell", checks.shell_check),
+        ("imports", checks.imports_check),
+        ("todo", checks.todo_check),
+        ("tests", checks.tests_check),
+        ("fidelity", checks.fidelity_check),
     ]
-    for runner in runners:
-        for finding in runner(manifest, rr, sr):
-            report.add(finding)
+    for name, runner in runners:
+        _run_guarded(name, runner, manifest, rr, sr, report)
 
     if semantico:
-        for finding in semantic.run(manifest, rr, sr):
-            report.add(finding)
+        _run_guarded("semantic", semantic.run, manifest, rr, sr, report)
 
     return report
+
+
+def _run_guarded(
+    name: str,
+    runner: CheckRunner,
+    manifest: Manifest,
+    rr: Path,
+    sr: Path,
+    report: Report,
+) -> None:
+    """Ejecuta un check aislando sus excepciones no previstas.
+
+    Sin esta guarda, un bug en cualquier check (p.ej. OSError al leer un
+    symlink roto, IndexError al parsear un AST exotico) aborta toda la
+    auditoria y oculta los findings de los checks posteriores. Emitimos
+    un finding HIGH explicito para que el crash sea visible en el informe
+    sin bloquear el merge (CRITICAL lo hace, HIGH solo avisa).
+    """
+    try:
+        for finding in runner(manifest, rr, sr):
+            report.add(finding)
+    except Exception as exc:
+        report.add(
+            Finding(
+                check=name,
+                severity=Severity.HIGH,
+                target="(verificador)",
+                mensaje=f"Check '{name}' crasheo: {type(exc).__name__}",
+                detalle=(f"{exc!s}"[:300] + " [revisar manualmente; el check no pudo completar]"),
+            )
+        )
 
 
 def informes_dir() -> Path:

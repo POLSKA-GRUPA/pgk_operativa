@@ -521,6 +521,105 @@ def test_manifest_rejects_origen_path_traversal(tmp_path: Path, field: str, valu
         Manifest.load(manifest_path)
 
 
+def test_list_manifests_rejects_non_canonical_names(tmp_path: Path) -> None:
+    """Regresion Bug #16: list_manifests() acepta PR-abc.yaml por el glob laxo.
+
+    El glob `PR-*.yaml` matchea cualquier cosa. Si alguien deja un `PR-wip.yaml`
+    en la carpeta, al enumerar manifests se explota al intentar convertir
+    'wip' a int. Filtramos por regex estricto `^PR-\\d{4}\\.yaml$`.
+    """
+    (tmp_path / "PR-0001.yaml").write_text("pr: 1\n", encoding="utf-8")
+    (tmp_path / "PR-9999.yaml").write_text("pr: 9999\n", encoding="utf-8")
+    (tmp_path / "PR-abc.yaml").write_text("garbage", encoding="utf-8")
+    (tmp_path / "PR-1.yaml").write_text("garbage", encoding="utf-8")
+    (tmp_path / "PR-00001.yaml").write_text("garbage", encoding="utf-8")
+    (tmp_path / "PR-0001.yaml.bak").write_text("garbage", encoding="utf-8")
+    (tmp_path / "README.md").write_text("no", encoding="utf-8")
+
+    result = list_manifests(manifests_dir_override=tmp_path)
+    nombres = [p.name for p in result]
+
+    assert nombres == ["PR-0001.yaml", "PR-9999.yaml"]
+
+
+@pytest.mark.parametrize(
+    ("label", "raw"),
+    [
+        ("archivo.target", "src\\..\\..\\etc\\passwd"),
+        ("archivo.target", "foo\\bar\\..\\..\\etc"),
+        ("origen.path", "a\\b\\..\\c"),
+    ],
+)
+def test_reject_escaping_path_detects_windows_backslash(label: str, raw: str) -> None:
+    """Regresion Bug #17: _reject_escaping_path usaba solo PurePosixPath.
+
+    PurePosixPath trata `\\` como un caracter literal, no como separador, por
+    lo que `src\\..\\..\\etc` queda como un unico part sin `..`. Un manifest
+    editado en Windows puede escapar del repo. Evaluamos tambien con
+    PureWindowsPath para detectar el caso.
+    """
+    from pgk_operativa.verificador.manifest import _reject_escaping_path
+
+    with pytest.raises(ValueError, match=r"path traversal|relativa"):
+        _reject_escaping_path(label, raw)
+
+
+def test_reject_escaping_path_rejects_nul_byte() -> None:
+    """Regresion Bug #17b: ruta con NUL byte debe rechazarse.
+
+    En POSIX `foo\\x00/etc/passwd` corta la ruta al abrir syscalls, pudiendo
+    acceder a archivos distintos del declarado. En Windows lanza OSError
+    silenciosamente. Validamos de forma proactiva.
+    """
+    from pgk_operativa.verificador.manifest import _reject_escaping_path
+
+    with pytest.raises(ValueError, match="NUL"):
+        _reject_escaping_path("archivo.target", "foo\x00.py")
+
+
+def test_auditor_isolates_crashing_check(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Regresion Bug #15: un check que crashee no debe abortar la auditoria.
+
+    Sin try/except por check, un `OSError`/`IndexError`/`KeyError` dentro de
+    cualquier runner mata toda la auditoria y oculta findings de los checks
+    posteriores. Monkeypatcheamos `targets_check` para lanzar y comprobamos
+    que (a) el runner siguiente se ejecuta y (b) aparece finding HIGH del
+    crash.
+    """
+    from pgk_operativa.verificador import auditor, checks
+
+    manifest_path = tmp_path / "PR-0001.yaml"
+    _write_manifest(
+        manifest_path,
+        {
+            "pr": 1,
+            "fecha": "2026-04-16",
+            "titulo": "Test crash isolation",
+            "archivos": [
+                {"target": "mod.py", "relacion": "nuevo", "notas": "new"},
+            ],
+        },
+    )
+    (tmp_path / "mod.py").write_text("x = 1\n", encoding="utf-8")
+    manifest = Manifest.load(manifest_path)
+
+    def _boom(*args: object, **kwargs: object) -> list[Finding]:
+        raise RuntimeError("boom explicito")
+
+    monkeypatch.setattr(checks, "targets_check", _boom)
+
+    report = auditor.audit(manifest, repo_root=tmp_path, repos_root=tmp_path, semantico=False)
+
+    crash_findings = [f for f in report.findings if f.check == "targets"]
+    assert len(crash_findings) == 1
+    assert crash_findings[0].severity == Severity.HIGH
+    assert "crasheo" in crash_findings[0].mensaje
+    assert "RuntimeError" in crash_findings[0].mensaje
+    assert "boom explicito" in crash_findings[0].detalle
+    # los otros checks siguen ejecutandose: el reporte no quedo vacio ni abortado
+    assert len(report.findings) >= 1
+
+
 def test_shell_check_flags_empty_nested_method(tmp_path: Path) -> None:
     """Regresion: tras quitar el isinstance redundante post-_iter_named,
     metodos anidados con cuerpo trivial siguen siendo detectados.
