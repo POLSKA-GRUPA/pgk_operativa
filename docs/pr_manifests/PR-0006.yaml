@@ -14,14 +14,14 @@ archivos:
         - "_extraer_recomendaciones"
     notas: |
       Paso 5 Semana 3. Se portan tres helpers deterministas del nodo
-      fiscal origen: fallback de analisis, extractor de fuentes
-      (BOE, Ley, RD, Articulo, Convenio, Modelo 210, IRNR) y
+      fiscal origen: fallback de análisis, extractor de fuentes
+      (BOE, Ley, RD, Artículo, Convenio, Modelo 210, IRNR) y
       extractor de recomendaciones (recomiendo, debe, importante).
       `nodo_fiscal` ahora enriquece la salida con `fuentes_citadas` y
       `recomendaciones` calculadas sobre la respuesta LLM. El nombre
-      publico pierde el guion bajo porque dejan de ser privados del
-      nodo y pasan a ser API del modulo. Comportamiento identico al
-      origen verificable con tests de regresion.
+      público pierde el guión bajo porque dejan de ser privados del
+      nodo y pasan a ser API del módulo. Comportamiento idéntico al
+      origen verificable con tests de regresión.
 
   # Contable: port de 5 helpers deterministas
   - target: src/pgk_operativa/nodos/contable.py
@@ -41,7 +41,7 @@ archivos:
       `fuentes_citadas`, `asientos_detectados`, `modelos_detectados`
       y `pasos_aon`. Mantiene la tupla de 12 modelos AEAT del
       origen (303, 130, 131, 210, 200, 202, 349, 390, 100, 111, 115,
-      347). Integracion real con conta-pgk-hispania queda para Paso
+      347). Integración real con conta-pgk-hispania queda para Paso
       12.
 
   # Legal: port de 2 helpers deterministas
@@ -54,10 +54,10 @@ archivos:
         - "_analisis_legal_basico"
         - "_extraer_fuentes_legales"
     notas: |
-      Paso 5 Semana 3. Se portan 2 helpers del nodo German. El
+      Paso 5 Semana 3. Se portan 2 helpers del nodo Germán. El
       extractor de fuentes cubre 18 patrones (Ley, BOE, RD, Art.,
-      STS, STSJ, STC, Codigo Civil, LEC, LJCA, LPAC, CC, CCom, etc.).
-      Integracion con skill de verificacion juridica documental
+      STS, STSJ, STC, Código Civil, LEC, LJCA, LPAC, CC, CCom, etc.).
+      Integración con skill de verificación jurídica documental
       queda para Fase 4.
 
   # Modulos sin helpers portables: documentados como thin wrappers
@@ -82,7 +82,7 @@ archivos:
     notas: |
       Paso 5: thin wrapper documentado. El nodo_jennifer origen es
       mantenimiento de filesystem, no post-procesado de texto. Se
-      deja para Fase 4 cuando se definan checks de calidad explicitos.
+      deja para Fase 4 cuando se definan checks de calidad explícitos.
 
   - target: src/pgk_operativa/nodos/marketing.py
     relacion: inspirado
@@ -92,15 +92,15 @@ archivos:
       simbolos: ["nodo_mark"]
     notas: |
       Paso 5: thin wrapper documentado. El nodo_mark origen delega a
-      mark_agent.consultar_mark con PersonaBlend, no portado aun.
-      Se portara en Fase 4.
+      mark_agent.consultar_mark con PersonaBlend, no portado aún.
+      Se portará en Fase 4.
 
   - target: src/pgk_operativa/nodos/laboral.py
     relacion: nuevo
     notas: |
       Paso 5: thin wrapper documentado. No hay equivalente en origen
-      (laboral se resolvia por chat conversacional o fiscal). Aqui se
-      trata como modulo tecnico independiente preparado para integrar
+      (laboral se resolvía por chat conversacional o fiscal). Aquí se
+      trata como módulo técnico independiente preparado para integrar
       pgk-laboral-desk en Fase 4.
 
   # Tests de regresion paralelos (requisito Paso 5 del CONSOLIDADO §44.3)
@@ -113,5 +113,5 @@ archivos:
       LangGraph (1 test). No invocan LLM: son snapshots de
       input->output que aseguran que el comportamiento post-port
       coincide con el pre-port. Si en el futuro se cambian los
-      patrones de extraccion, estos tests fallan y se investiga si
-      es intencional (refactor) o regresion (bug).
+      patrones de extracción, estos tests fallan y se investiga si
+      es intencional (refactor) o regresión (bug).
