@@ -208,6 +208,13 @@ def verificar(
         console.print("[yellow]Uso:[/yellow] pgk verificar --pr N  |  pgk verificar --all")
         raise typer.Exit(code=2)
 
+    # Sin esta guarda, `--pr 0` generaba `PR-0000.yaml` (no existe: el
+    # numerado empieza en 1) y `--pr -5` generaba `PR--005.yaml` (Path
+    # invalido). En ambos casos terminaba en FileNotFoundError confuso.
+    if pr is not None and pr <= 0:
+        console.print(f"[red]Error:[/red] --pr debe ser entero positivo, got {pr}.")
+        raise typer.Exit(code=2)
+
     manifests: list[Path]
     if pr is not None:
         manifests = [manifests_dir() / f"PR-{pr:04d}.yaml"]

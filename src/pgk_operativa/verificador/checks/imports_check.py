@@ -14,16 +14,25 @@ from pgk_operativa.verificador.manifest import Manifest
 from pgk_operativa.verificador.report import Finding, Severity
 
 
+def _is_pgk_module(name: str) -> bool:
+    """True solo si `name` es el paquete pgk_operativa o un submodulo suyo.
+
+    `startswith("pgk_operativa")` matchearia por error paquetes colindantes
+    como `pgk_operativa_extra`. Comparamos nombre exacto o prefijo con punto.
+    """
+    return name == "pgk_operativa" or name.startswith("pgk_operativa.")
+
+
 def _collect_imports(tree: ast.AST) -> list[tuple[int, str]]:
     """Devuelve lista de (lineno, module_path) para imports absolutos de pgk_operativa."""
     out: list[tuple[int, str]] = []
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             for alias in node.names:
-                if alias.name.startswith("pgk_operativa"):
+                if _is_pgk_module(alias.name):
                     out.append((node.lineno, alias.name))
         elif isinstance(node, ast.ImportFrom):
-            if node.module and node.module.startswith("pgk_operativa") and node.level == 0:
+            if node.module and _is_pgk_module(node.module) and node.level == 0:
                 out.append((node.lineno, node.module))
     return out
 

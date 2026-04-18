@@ -275,6 +275,55 @@ def test_report_finding_severity_ordering() -> None:
     assert f_crit.severity.value > f_low.severity.value
 
 
+def test_manifest_rejects_non_dict_archivos_entries(tmp_path: Path) -> None:
+    """archivos con entries str/None debe dar ValueError, no AttributeError."""
+    manifest_path = tmp_path / "PR-7777.yaml"
+    _write_manifest(
+        manifest_path,
+        {
+            "pr": 7777,
+            "fecha": "2026-04-17",
+            "titulo": "Bad entries",
+            "archivos": ["src/a.py", None],
+        },
+    )
+    with pytest.raises(ValueError, match="archivos\\[0\\] debe ser un dict"):
+        Manifest.load(manifest_path)
+
+
+def test_fidelity_check_handles_syntax_error_in_origen(tmp_path: Path) -> None:
+    """Origen con SyntaxError no debe disparar HIGH falso positivo por simbolos."""
+    origen_root = tmp_path / "repos" / "repo_x"
+    (origen_root / "src").mkdir(parents=True)
+    # Archivo con syntax error: `def foo(` sin cerrar.
+    (origen_root / "src" / "broken.py").write_text("def foo(\n    pass\n", encoding="utf-8")
+    (tmp_path / "src").mkdir(exist_ok=True)
+    (tmp_path / "src" / "copia.py").write_text("x = 1\n", encoding="utf-8")
+    archivo = ArchivoManifest(
+        target="src/copia.py",
+        relacion=Relacion.ADAPTADO,
+        origen=Origen(repo="repo_x", path="src/broken.py", simbolos=["foo"]),
+        notas="",
+    )
+    findings = _run_fidelity(_make_manifest([archivo]), tmp_path, tmp_path / "repos")
+    # Debe avisar con MEDIUM (no parseable), no HIGH por "missing".
+    assert any(f.severity == Severity.MEDIUM and "parsear" in f.mensaje.lower() for f in findings)
+    assert not any(
+        f.severity == Severity.HIGH and "no existen" in f.mensaje.lower() for f in findings
+    )
+
+
+def test_imports_check_does_not_match_sibling_package(tmp_path: Path) -> None:
+    """`pgk_operativa_extra` no es submodulo de pgk_operativa y no debe colarse."""
+    (tmp_path / "src" / "pgk_operativa").mkdir(parents=True)
+    (tmp_path / "src" / "pgk_operativa" / "__init__.py").write_text("", encoding="utf-8")
+    archivo = ArchivoManifest(target="mod.py", relacion=Relacion.NUEVO, origen=None, notas="")
+    (tmp_path / "mod.py").write_text("import pgk_operativa_extra\n", encoding="utf-8")
+    findings = _run_imports(_make_manifest([archivo]), tmp_path, tmp_path)
+    # No debe flagear nada: no es nuestro paquete.
+    assert not findings
+
+
 def test_manifests_dir_resolves() -> None:
     md = manifests_dir()
     assert md.name == "pr_manifests"

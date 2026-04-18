@@ -32,11 +32,17 @@ def _parse_lineas(rango: str) -> tuple[int, int] | None:
     return (start, end)
 
 
-def _extract_symbols(source: str) -> set[str]:
+def _extract_symbols(source: str) -> set[str] | None:
+    """Extrae nombres de def/class del origen.
+
+    Devuelve None si el archivo no parsea como Python (SyntaxError). El caller
+    debe distinguir "no pude parsear" de "parse OK pero falta el simbolo"
+    para no disparar falsos positivos HIGH.
+    """
     try:
         tree = ast.parse(source)
     except SyntaxError:
-        return set()
+        return None
     out: set[str] = set()
     for node in ast.walk(tree):
         if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
@@ -113,18 +119,37 @@ def run(manifest: Manifest, repo_root: Path, repos_root: Path) -> list[Finding]:
 
         if origen.simbolos and source_path.suffix == ".py":
             present = _extract_symbols(source_content)
-            missing = [s for s in origen.simbolos if s not in present]
-            if missing:
+            if present is None:
+                # SyntaxError en el origen: no podemos concluir nada sobre los
+                # simbolos. Avisamos con MEDIUM en vez de disparar HIGH por
+                # "missing" falso positivo.
                 findings.append(
                     Finding(
                         check="fidelity",
-                        severity=Severity.HIGH,
+                        severity=Severity.MEDIUM,
                         target=archivo.target,
-                        mensaje=(f"Simbolos declarados no existen en origen: {', '.join(missing)}"),
+                        mensaje="No se pudo parsear el archivo origen como Python",
                         detalle=(
-                            f"Archivo origen: {source_path}. "
-                            "Puede indicar copia obsoleta o renombrado."
+                            f"Archivo: {source_path}. SyntaxError al analizar. "
+                            "Verifica manualmente que los simbolos existen."
                         ),
                     )
                 )
+            else:
+                missing = [s for s in origen.simbolos if s not in present]
+                if missing:
+                    findings.append(
+                        Finding(
+                            check="fidelity",
+                            severity=Severity.HIGH,
+                            target=archivo.target,
+                            mensaje=(
+                                f"Simbolos declarados no existen en origen: {', '.join(missing)}"
+                            ),
+                            detalle=(
+                                f"Archivo origen: {source_path}. "
+                                "Puede indicar copia obsoleta o renombrado."
+                            ),
+                        )
+                    )
     return findings

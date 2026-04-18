@@ -44,3 +44,15 @@ def test_ana_with_consenso_flag() -> None:
         result = runner.invoke(app, ["ana", "--consenso", "decision fiscal"])
     assert result.exit_code == 0, result.stdout
     assert "Ana" in result.stdout
+
+
+def test_verificar_rejects_pr_zero() -> None:
+    """--pr 0 y --pr negativo deben fallar con exit 2, no con FileNotFoundError."""
+    result = runner.invoke(app, ["verificar", "--pr", "0"])
+    assert result.exit_code == 2
+    assert "positivo" in result.stdout or "positivo" in (result.stderr or "")
+
+
+def test_verificar_rejects_pr_negative() -> None:
+    result = runner.invoke(app, ["verificar", "--pr", "-5"])
+    assert result.exit_code == 2

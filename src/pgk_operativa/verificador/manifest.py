@@ -152,7 +152,17 @@ class Manifest:
         if not isinstance(archivos_raw, list):
             raise ValueError("archivos debe ser lista")
 
-        archivos = [ArchivoManifest.from_dict(cast(dict[str, object], a)) for a in archivos_raw]
+        # Validamos cada entrada antes de pasarla a from_dict: si es str/None
+        # o cualquier tipo no-dict, .get() lanzaria AttributeError, que el CLI
+        # no captura (solo atrapa FileNotFoundError/ValueError). Hacemos la
+        # validacion aqui para devolver un ValueError util.
+        archivos: list[ArchivoManifest] = []
+        for idx, a in enumerate(archivos_raw):
+            if not isinstance(a, dict):
+                raise ValueError(
+                    f"archivos[{idx}] debe ser un dict YAML, got {type(a).__name__}: {a!r}"
+                )
+            archivos.append(ArchivoManifest.from_dict(cast(dict[str, object], a)))
         return cls(
             pr=pr_raw,
             fecha=str(fecha_raw),
