@@ -72,22 +72,34 @@ def _parse_severity(raw: str) -> Severity:
 
 
 def _extract_json(text: str) -> dict[str, object]:
-    """Extrae el primer bloque JSON valido de la respuesta del LLM."""
+    """Extrae el primer objeto JSON valido de la respuesta del LLM.
+
+    El LLM puede devolver prosa con llaves (p.ej. "{placeholder}") antes del
+    JSON real. El algoritmo ingenuo `text.find("{") + text.rfind("}")`
+    captura desde la primera `{` hasta la ultima `}`, creando un slice
+    invalido cuando la prosa contiene llaves. Iteramos con
+    `json.JSONDecoder().raw_decode()` desde cada candidato `{` hasta
+    encontrar uno que parsee como dict, lo que tambien respeta `{` dentro
+    de strings JSON.
+    """
     text = text.strip()
     # Algunos modelos envuelven en ```json ... ```
     if text.startswith("```"):
         lines = text.splitlines()
         inner = [ln for ln in lines if not ln.strip().startswith("```")]
-        text = "\n".join(inner)
-    start = text.find("{")
-    end = text.rfind("}")
-    if start == -1 or end == -1 or end <= start:
-        raise ValueError(f"No se encontro JSON valido en respuesta LLM: {text[:200]!r}")
-    blob = text[start : end + 1]
-    data = json.loads(blob)
-    if not isinstance(data, dict):
-        raise ValueError("JSON devuelto no es un objeto")
-    return data
+        text = "\n".join(inner).strip()
+
+    decoder = json.JSONDecoder()
+    for i, ch in enumerate(text):
+        if ch != "{":
+            continue
+        try:
+            data, _ = decoder.raw_decode(text[i:])
+        except json.JSONDecodeError:
+            continue
+        if isinstance(data, dict):
+            return data
+    raise ValueError(f"No se encontro JSON valido en respuesta LLM: {text[:200]!r}")
 
 
 def run(manifest: Manifest, repo_root: Path, repos_root: Path) -> list[Finding]:

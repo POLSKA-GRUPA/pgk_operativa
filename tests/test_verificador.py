@@ -639,3 +639,103 @@ def test_shell_check_flags_empty_nested_method(tmp_path: Path) -> None:
     assert any("metodo_vacio" in m for m in nombres)
     assert not any("metodo_real" in m for m in nombres)
     assert all(f.check == "shell" for f in findings)
+
+
+def test_extract_json_ignores_prose_with_braces() -> None:
+    """Regresion Bug #22: find('{') + rfind('}') captura prosa con llaves.
+
+    El LLM puede responder con prosa que incluye placeholders como
+    '{funcion_foo}' antes del JSON real. El algoritmo ingenuo creaba un
+    slice invalido ('{funcion_foo} ... {"preserva": true}') que fallaba
+    al parsearse. Iteramos con raw_decode() desde cada candidato.
+    """
+    from pgk_operativa.verificador.semantic import _extract_json
+
+    text = (
+        "Analizando el archivo, veo que {la funcion foo} esta presente "
+        "y cumple su rol. Decision final:\n"
+        '{"preserva_intencion": true, "diferencias_materiales": []}'
+    )
+    data = _extract_json(text)
+    assert data["preserva_intencion"] is True
+    assert data["diferencias_materiales"] == []
+
+
+def test_extract_json_handles_fenced_block_with_trailing_prose() -> None:
+    """El bloque ```json ... ``` con prosa posterior debe parsearse limpio."""
+    from pgk_operativa.verificador.semantic import _extract_json
+
+    text = (
+        "```json\n"
+        '{"preserva_intencion": false, "diferencias_materiales": ["falta manejo de None"]}\n'
+        "```\n"
+        "Nota final: revisar con el equipo {antes de mergear}."
+    )
+    data = _extract_json(text)
+    assert data["preserva_intencion"] is False
+    assert data["diferencias_materiales"] == ["falta manejo de None"]
+
+
+def test_manifest_rejects_duplicate_yaml_keys(tmp_path: Path) -> None:
+    """Regresion Bug #23: PyYAML safe_load acepta claves duplicadas silenciosamente.
+
+    Un manifest con `pr: 1` y despues `pr: 2` en el mismo mapping se
+    cargaria como {'pr': 2} sin aviso, enmascarando un merge conflict
+    mal resuelto o un copy-paste accidental. El StrictSafeLoader rechaza
+    la carga con ConstructorError, envuelto como ValueError por load().
+    """
+    manifest_path = tmp_path / "PR-0077.yaml"
+    manifest_path.write_text(
+        "pr: 77\n"
+        "fecha: '2026-04-17'\n"
+        "titulo: 'Test duplicate keys'\n"
+        "titulo: 'OVERWRITTEN'\n"
+        "archivos: []\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="clave YAML duplicada"):
+        Manifest.load(manifest_path)
+
+
+def test_manifest_load_by_pr_number_out_of_range(tmp_path: Path) -> None:
+    """Regresion Bug #24: load_by_pr_number aceptaba >9999 produciendo inconsistencia.
+
+    `PR-{pr_number:04d}.yaml` con pr_number=12345 produce `PR-12345.yaml`,
+    que luego list_manifests() filtra fuera (regex exige exactamente 4
+    digitos). El sistema quedaba con un manifest cargable por numero pero
+    invisible al listado global. Se exige rango [1, 9999].
+    """
+    with pytest.raises(ValueError, match="fuera de rango"):
+        Manifest.load_by_pr_number(12345, manifests_dir=tmp_path)
+    with pytest.raises(ValueError, match="fuera de rango"):
+        Manifest.load_by_pr_number(0, manifests_dir=tmp_path)
+    with pytest.raises(ValueError, match="fuera de rango"):
+        Manifest.load_by_pr_number(-1, manifests_dir=tmp_path)
+    with pytest.raises(ValueError, match="int"):
+        Manifest.load_by_pr_number(True, manifests_dir=tmp_path)  # type: ignore[arg-type]
+
+
+def test_todo_check_respects_escaped_quotes(tmp_path: Path) -> None:
+    """Regresion Bug #25: _is_in_comment no respetaba escapes dentro de strings.
+
+    Una cadena como `msg = "cerrado \\" # TODO: algo"` con un escape impar
+    cerraba prematuramente el string en la maquina de estados y el `#`
+    dentro del string se interpretaba como inicio de comentario,
+    emitiendo un falso positivo LOW.
+    """
+    from pgk_operativa.verificador.checks.todo_check import _is_in_comment
+
+    # TODO dentro de string con escape: NO debe detectarse como comentario.
+    linea = 'msg = "hola \\" # TODO: fake"'
+    pos = linea.find("TODO")
+    assert not _is_in_comment(linea, pos), 'escape \\" no debe cerrar string prematuramente'
+
+    # TODO en comentario real: SI debe detectarse.
+    linea2 = "x = 1  # TODO: real"
+    pos2 = linea2.find("TODO")
+    assert _is_in_comment(linea2, pos2), "TODO en comentario real debe detectarse"
+
+    # Backslash fuera de string no es escape, no debe alterar el parser.
+    linea3 = "x = 1 \\\n    # TODO: continuacion"
+    pos3 = linea3.find("TODO")
+    assert _is_in_comment(linea3, pos3), "backslash fuera de string no es escape"

@@ -40,6 +40,45 @@ from pgk_operativa.core.paths import REPO_ROOT
 _PR_MANIFEST_FILENAME = re.compile(r"^PR-\d{4}\.yaml$")
 
 
+class _StrictSafeLoader(yaml.SafeLoader):
+    """SafeLoader que rechaza claves duplicadas en mappings.
+
+    PyYAML por defecto acepta `pr: 1\\npr: 2` y devuelve `{'pr': 2}` sin
+    aviso. Un manifest con un campo accidentalmente duplicado (copy-paste
+    sospechoso, merge conflict mal resuelto) perderia el primer valor sin
+    que ningun check lo detecte. Con este loader la carga lanza
+    ConstructorError, que `Manifest.load()` envuelve como ValueError.
+    """
+
+
+def _construct_mapping_no_duplicates(
+    loader: yaml.SafeLoader, node: yaml.MappingNode
+) -> dict[object, object]:
+    mapping: dict[object, object] = {}
+    for key_node, value_node in node.value:
+        # construct_object no esta tipada en PyYAML; cast explicito al tipo
+        # real para no propagar `Any` al resto del modulo.
+        key = cast(object, loader.construct_object(key_node, deep=True))  # type: ignore[no-untyped-call]
+        if key in mapping:
+            raise yaml.constructor.ConstructorError(
+                None,
+                None,
+                f"clave YAML duplicada: {key!r}",
+                key_node.start_mark,
+            )
+        mapping[key] = cast(
+            object,
+            loader.construct_object(value_node, deep=True),  # type: ignore[no-untyped-call]
+        )
+    return mapping
+
+
+_StrictSafeLoader.add_constructor(
+    yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG,
+    _construct_mapping_no_duplicates,
+)
+
+
 class Relacion(str, Enum):
     """Tipo de relacion entre archivo destino y origen."""
 
@@ -167,7 +206,7 @@ class Manifest:
             raise FileNotFoundError(f"Manifest no encontrado: {manifest_path}")
         try:
             with manifest_path.open("r", encoding="utf-8") as f:
-                data = yaml.safe_load(f)
+                data = yaml.load(f, Loader=_StrictSafeLoader)  # noqa: S506
         except yaml.YAMLError as exc:
             # yaml.YAMLError (ScannerError, ParserError, ...) no hereda de ValueError.
             # Lo envolvemos para que el CLI pueda capturarlo con su except estrecho.
@@ -222,7 +261,20 @@ class Manifest:
 
     @classmethod
     def load_by_pr_number(cls, pr_number: int, manifests_dir: Path | None = None) -> Manifest:
-        """Carga manifest por numero de PR desde `docs/pr_manifests/`."""
+        """Carga manifest por numero de PR desde `docs/pr_manifests/`.
+
+        Rango [1, 9999] porque `PR-{pr_number:04d}.yaml` solo pad-cero a 4
+        digitos: pr_number=12345 produciria `PR-12345.yaml`, que luego
+        list_manifests() filtra fuera (regex exige 4 digitos) y la carga
+        por numero resulta inconsistente con el resto del sistema.
+        """
+        if not isinstance(pr_number, int) or isinstance(pr_number, bool):
+            raise ValueError(f"pr_number debe ser int, got {type(pr_number).__name__}")
+        if pr_number <= 0 or pr_number > 9999:
+            raise ValueError(
+                f"pr_number fuera de rango [1, 9999]: {pr_number}. "
+                "El convenio PR-NNNN.yaml limita a 4 digitos."
+            )
         base = manifests_dir or (REPO_ROOT / "docs" / "pr_manifests")
         candidate = base / f"PR-{pr_number:04d}.yaml"
         return cls.load(candidate)

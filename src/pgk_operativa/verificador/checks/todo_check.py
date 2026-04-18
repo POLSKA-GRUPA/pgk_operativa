@@ -19,6 +19,11 @@ def _is_in_comment(line: str, match_start: int) -> bool:
     msg = "TODO: fix", generando falsos positivos. Para Python basta con
     exigir que aparezca `#` antes del match en la misma linea, o que la
     linea empiece con triple-comillas (docstring abierto).
+
+    Respeta escapes `\\"` y `\\'`: sin esto una cadena con un escape
+    impar como `"a \\" # TODO"` cerraria prematuramente el string y el
+    `#` interno se interpretaria como inicio de comentario, emitiendo un
+    falso positivo LOW.
     """
     prefix = line[:match_start]
     stripped = prefix.lstrip()
@@ -27,13 +32,21 @@ def _is_in_comment(line: str, match_start: int) -> bool:
     # Buscar '#' fuera de cadenas simples a la izquierda del match.
     in_single = False
     in_double = False
-    for ch in prefix:
+    i = 0
+    while i < len(prefix):
+        ch = prefix[i]
+        if ch == "\\" and i + 1 < len(prefix) and (in_single or in_double):
+            # Escape dentro de string: saltar el caracter escapado. Solo
+            # aplica dentro de strings; fuera de strings `\` no es escape.
+            i += 2
+            continue
         if ch == "'" and not in_double:
             in_single = not in_single
         elif ch == '"' and not in_single:
             in_double = not in_double
         elif ch == "#" and not in_single and not in_double:
             return True
+        i += 1
     return False
 
 
