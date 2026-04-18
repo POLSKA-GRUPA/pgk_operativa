@@ -20,6 +20,10 @@ def _parse_lineas(rango: str) -> tuple[int, int] | None:
             n = int(rango.strip())
         except ValueError:
             return None
+        # Sin esta guarda, "0" o "-1" pasaban como (0,0)/(-1,-1) y la
+        # comparacion `rango[1] > total_lines` nunca los flagea.
+        if n < 1:
+            return None
         return (n, n)
     parts = rango.split("-", 1)
     try:

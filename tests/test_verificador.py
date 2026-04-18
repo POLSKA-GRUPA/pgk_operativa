@@ -8,12 +8,22 @@ import pytest
 import yaml
 
 from pgk_operativa.verificador.auditor import audit
-from pgk_operativa.verificador.checks.fidelity_check import run as _run_fidelity
+from pgk_operativa.verificador.checks.fidelity_check import (
+    _parse_lineas,
+)
+from pgk_operativa.verificador.checks.fidelity_check import (
+    run as _run_fidelity,
+)
 from pgk_operativa.verificador.checks.imports_check import run as _run_imports
 from pgk_operativa.verificador.checks.lines_check import run as _run_lines
 from pgk_operativa.verificador.checks.shell_check import run as _run_shell
 from pgk_operativa.verificador.checks.targets_check import run as _run_targets
-from pgk_operativa.verificador.checks.tests_check import run as _run_tests_check
+from pgk_operativa.verificador.checks.tests_check import (
+    _is_noop_test,
+)
+from pgk_operativa.verificador.checks.tests_check import (
+    run as _run_tests_check,
+)
 from pgk_operativa.verificador.checks.todo_check import run as _run_todo
 from pgk_operativa.verificador.manifest import (
     ArchivoManifest,
@@ -311,6 +321,35 @@ def test_fidelity_check_handles_syntax_error_in_origen(tmp_path: Path) -> None:
     assert not any(
         f.severity == Severity.HIGH and "no existen" in f.mensaje.lower() for f in findings
     )
+
+
+def test_parse_lineas_rejects_zero_and_negative_single() -> None:
+    """_parse_lineas no debe aceptar '0' ni '-1' como rango valido."""
+    assert _parse_lineas("0") is None
+    assert _parse_lineas("-1") is None
+    assert _parse_lineas("1") == (1, 1)
+    assert _parse_lineas("42") == (42, 42)
+
+
+def test_is_noop_test_failing_compare_is_not_noop() -> None:
+    """`assert 1 == 2` no es no-op: siempre falla, merece respeto del auditor."""
+    import ast as _ast
+
+    tree = _ast.parse("def test_x():\n    assert 1 == 2\n")
+    fn = tree.body[0]
+    assert isinstance(fn, _ast.FunctionDef)
+    assert _is_noop_test(fn) is False
+
+
+def test_is_noop_test_true_compare_is_noop() -> None:
+    """`assert 1 == 1` y `assert 2 > 1` sí son no-op triviales."""
+    import ast as _ast
+
+    for src in ("def t():\n    assert 1 == 1\n", "def t():\n    assert 2 > 1\n"):
+        tree = _ast.parse(src)
+        fn = tree.body[0]
+        assert isinstance(fn, _ast.FunctionDef)
+        assert _is_noop_test(fn) is True
 
 
 def test_imports_check_does_not_match_sibling_package(tmp_path: Path) -> None:

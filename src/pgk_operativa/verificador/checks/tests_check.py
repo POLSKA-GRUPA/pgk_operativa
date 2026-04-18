@@ -8,6 +8,40 @@ from pathlib import Path
 from pgk_operativa.verificador.manifest import Manifest
 from pgk_operativa.verificador.report import Finding, Severity
 
+_CMP_OPS: dict[type[ast.cmpop], object] = {
+    ast.Eq: lambda a, b: a == b,
+    ast.NotEq: lambda a, b: a != b,
+    ast.Lt: lambda a, b: a < b,
+    ast.LtE: lambda a, b: a <= b,
+    ast.Gt: lambda a, b: a > b,
+    ast.GtE: lambda a, b: a >= b,
+    ast.Is: lambda a, b: a is b,
+    ast.IsNot: lambda a, b: a is not b,
+    ast.In: lambda a, b: a in b,
+    ast.NotIn: lambda a, b: a not in b,
+}
+
+
+def _constant_compare_is_true(node: ast.Compare) -> bool | None:
+    """Evalua un Compare con operandos ast.Constant sin usar eval.
+
+    Devuelve True/False si se puede evaluar, None si algun operando no es
+    constante o el operador no esta soportado.
+    """
+    if not all(isinstance(v, ast.Constant) for v in [node.left, *node.comparators]):
+        return None
+    values = [v.value for v in [node.left, *node.comparators]]  # type: ignore[attr-defined]
+    for i, op in enumerate(node.ops):
+        fn = _CMP_OPS.get(type(op))
+        if fn is None:
+            return None
+        try:
+            if not fn(values[i], values[i + 1]):  # type: ignore[operator]
+                return False
+        except TypeError:
+            return None
+    return True
+
 
 def _is_noop_test(func: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
     body = list(func.body)
@@ -23,7 +57,11 @@ def _is_noop_test(func: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
             if isinstance(test, ast.Constant) and bool(test.value):
                 continue
             if isinstance(test, ast.Compare):
-                if all(isinstance(v, ast.Constant) for v in [test.left, *test.comparators]):
+                # Solo es "no-op" si la comparacion de constantes evalua a True
+                # (p.ej. `assert 1 == 1`). `assert 1 == 2` siempre falla, no
+                # es un no-op y el test merece respeto del auditor.
+                result = _constant_compare_is_true(test)
+                if result is True:
                     continue
             return False
         return False
