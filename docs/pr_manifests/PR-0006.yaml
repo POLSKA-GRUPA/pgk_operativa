@@ -107,8 +107,8 @@ archivos:
   - target: tests/test_nodos_helpers.py
     relacion: nuevo
     notas: |
-      19 tests deterministas que capturan el comportamiento de los
-      helpers portados. Cubren fiscal (6 tests), contable (8 tests),
+      21 tests deterministas que capturan el comportamiento de los
+      helpers portados. Cubren fiscal (7 tests), contable (9 tests),
       legal (4 tests) y shape de los 7 nodos como callables
       LangGraph (1 test). No invocan LLM: son snapshots de
       input->output que aseguran que el comportamiento post-port
