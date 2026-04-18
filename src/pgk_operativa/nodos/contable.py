@@ -33,7 +33,7 @@ _PATRONES_FUENTES_CONTABLE: tuple[str, ...] = (
     "Ley",
     "BOE",
     "Real Decreto",
-    "RD",
+    "RD ",
     "Articulo",
     "Artículo",
     "Art.",
