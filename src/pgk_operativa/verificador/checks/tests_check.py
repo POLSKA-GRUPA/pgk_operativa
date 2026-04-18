@@ -84,13 +84,18 @@ def _iter_test_functions(
     Pytest solo recoge tests de nivel modulo o metodos de clases `Test*`,
     nunca funciones anidadas. Iteramos solo esos dos niveles para eliminar
     el falso positivo.
+
+    El filtro por `Test*` en clases replica `python_classes` default de
+    pytest: una clase `Helper` con un metodo `test_something` no es
+    recogida por pytest y flagearla como no-op genera falsos positivos
+    HIGH sobre codigo que no es ni siquiera un test.
     """
     out: list[ast.FunctionDef | ast.AsyncFunctionDef] = []
     for node in tree.body:
         if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
             if node.name.startswith("test_"):
                 out.append(node)
-        elif isinstance(node, ast.ClassDef):
+        elif isinstance(node, ast.ClassDef) and node.name.startswith("Test"):
             for item in node.body:
                 if isinstance(item, ast.FunctionDef | ast.AsyncFunctionDef):
                     if item.name.startswith("test_"):

@@ -881,6 +881,39 @@ def test_tests_check_detects_noop_in_class_method(tmp_path: Path) -> None:
     assert not any("test_good" in m for m in mensajes), f"test_good NO: {mensajes}"
 
 
+def test_tests_check_ignores_methods_in_non_test_classes(tmp_path: Path) -> None:
+    """Regresion Bug #34: clases sin prefijo `Test` no son recogidas por pytest.
+
+    El docstring de `_iter_test_functions` decia que solo se analizaban
+    metodos de clases `Test*`, pero el codigo iteraba TODA ClassDef. Una
+    clase utilitaria como `Helper` con un metodo que casualmente empieza
+    por `test_` quedaba flageada como no-op HIGH aunque pytest jamas la
+    recogeria. Ahora filtramos por `node.name.startswith("Test")`.
+    """
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "tests" / "test_mix.py").write_text(
+        "class Helper:\n"
+        "    def test_auxiliar(self) -> None:\n"
+        "        assert True\n"
+        "\n"
+        "class TestReal:\n"
+        "    def test_real_noop(self) -> None:\n"
+        "        assert True\n",
+        encoding="utf-8",
+    )
+    archivo = ArchivoManifest(
+        target="tests/test_mix.py", relacion=Relacion.NUEVO, origen=None, notas=""
+    )
+    findings = _run_tests_check(_make_manifest([archivo]), tmp_path, tmp_path)
+    mensajes = [f.mensaje for f in findings]
+    assert not any("test_auxiliar" in m for m in mensajes), (
+        f"Helper.test_auxiliar NO es test pytest: {mensajes}"
+    )
+    assert any("test_real_noop" in m for m in mensajes), (
+        f"TestReal.test_real_noop SI es test y es no-op: {mensajes}"
+    )
+
+
 def test_todo_check_matches_todo_with_parens(tmp_path: Path) -> None:
     """Regresion Bug #28: regex exigia `:` o whitespace justo tras TODO.
 
