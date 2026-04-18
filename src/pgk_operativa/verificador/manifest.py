@@ -28,7 +28,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import cast
 
 import yaml
@@ -43,6 +43,21 @@ class Relacion(str, Enum):
     ADAPTADO = "adaptado"
     INSPIRADO = "inspirado"
     NUEVO = "nuevo"
+
+
+def _reject_escaping_path(label: str, raw: str) -> None:
+    """Rechaza rutas absolutas o que escapan con `..`.
+
+    Sin esta guarda, un manifest con `target: "../../etc/passwd"` se
+    resolveria FUERA del repo destino, y los checks `exists()` apuntarian
+    a archivos ajenos al proyecto, produciendo findings enganosos.
+    Analogamente para `origen.path` y `origen.repo`.
+    """
+    p = PurePosixPath(raw)
+    if p.is_absolute() or raw.startswith(("/", "\\")):
+        raise ValueError(f"{label} debe ser ruta relativa, got {raw!r}")
+    if ".." in p.parts:
+        raise ValueError(f"{label} no puede contener '..' (path traversal), got {raw!r}")
 
 
 @dataclass(frozen=True)
@@ -72,6 +87,8 @@ class Origen:
             raise ValueError("origen.repo requerido (str no vacio)")
         if not isinstance(path, str) or not path:
             raise ValueError("origen.path requerido (str no vacio)")
+        _reject_escaping_path("origen.repo", repo)
+        _reject_escaping_path("origen.path", path)
         return cls(repo=repo, path=path, lineas=lineas, simbolos=simbolos)
 
 
@@ -99,6 +116,7 @@ class ArchivoManifest:
             raise ValueError("archivo.target requerido (str no vacio)")
         if not isinstance(relacion_raw, str):
             raise ValueError("archivo.relacion requerido (str)")
+        _reject_escaping_path("archivo.target", target)
 
         try:
             relacion = Relacion(relacion_raw)

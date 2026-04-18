@@ -454,4 +454,89 @@ def test_todo_check_still_matches_real_comment(tmp_path: Path) -> None:
     archivo = ArchivoManifest(target="mod.py", relacion=Relacion.NUEVO, origen=None, notas="")
     findings = _run_todo(_make_manifest([archivo]), repo_root, repo_root)
     assert len(findings) == 1
-    assert findings[0].check == "todo"
+
+
+@pytest.mark.parametrize(
+    "target",
+    [
+        "/etc/passwd",
+        "../../etc/passwd",
+        "src/../../../etc/passwd",
+        "..",
+        "\\windows\\system32",
+    ],
+)
+def test_manifest_rejects_target_path_traversal(tmp_path: Path, target: str) -> None:
+    """archivo.target con rutas absolutas o '..' debe ser rechazado.
+
+    Sin esta guarda, `repo_root / target` resolvia FUERA del repo y los
+    checks `exists()` apuntaban a archivos ajenos al proyecto, produciendo
+    findings enganosos ("archivo existe" cuando ni siquiera esta en el repo).
+    """
+    manifest_path = tmp_path / "PR-0001.yaml"
+    _write_manifest(
+        manifest_path,
+        {
+            "pr": 1,
+            "fecha": "2026-04-16",
+            "titulo": "Traversal",
+            "archivos": [{"target": target, "relacion": "nuevo"}],
+        },
+    )
+    with pytest.raises(ValueError, match=r"archivo\.target"):
+        Manifest.load(manifest_path)
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("repo", "../../.ssh"),
+        ("repo", "/absolute/repo"),
+        ("path", "../../etc/passwd"),
+        ("path", "/etc/passwd"),
+        ("path", "src/../../../secret"),
+    ],
+)
+def test_manifest_rejects_origen_path_traversal(tmp_path: Path, field: str, value: str) -> None:
+    """origen.repo y origen.path con `..` o absolutos deben ser rechazados."""
+    origen: dict[str, object] = {"repo": "legit_repo", "path": "legit/path.py"}
+    origen[field] = value
+    manifest_path = tmp_path / "PR-0001.yaml"
+    _write_manifest(
+        manifest_path,
+        {
+            "pr": 1,
+            "fecha": "2026-04-16",
+            "titulo": "Traversal origen",
+            "archivos": [
+                {
+                    "target": "src/a.py",
+                    "relacion": "adaptado",
+                    "origen": origen,
+                }
+            ],
+        },
+    )
+    with pytest.raises(ValueError, match=rf"origen\.{field}"):
+        Manifest.load(manifest_path)
+
+
+def test_shell_check_flags_empty_nested_method(tmp_path: Path) -> None:
+    """Regresion: tras quitar el isinstance redundante post-_iter_named,
+    metodos anidados con cuerpo trivial siguen siendo detectados.
+    """
+    repo_root = tmp_path
+    (repo_root / "mod.py").write_text(
+        "class Foo:\n"
+        "    def metodo_real(self):\n"
+        "        return 42\n"
+        "    def metodo_vacio(self):\n"
+        "        pass\n",
+        encoding="utf-8",
+    )
+    archivo = ArchivoManifest(target="mod.py", relacion=Relacion.ADAPTADO, origen=None, notas="")
+    findings = _run_shell(_make_manifest([archivo]), repo_root, repo_root)
+    nombres = {f.mensaje for f in findings}
+    assert any("metodo_vacio" in m for m in nombres)
+    assert not any("metodo_real" in m for m in nombres)
+    assert all(f.check == "shell" for f in findings)

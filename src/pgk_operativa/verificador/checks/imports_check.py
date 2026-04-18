@@ -38,23 +38,23 @@ def _collect_imports(tree: ast.AST) -> list[tuple[int, str]]:
 
 
 def _resolve(module: str, src_root: Path) -> bool:
-    """Verifica que `module` (punto-separado) existe como paquete o modulo en src_root."""
+    """Verifica que `module` (punto-separado) existe como paquete o modulo en src_root.
+
+    Para `ast.Import` y `ast.ImportFrom`, `node.module` / `alias.name` contienen
+    SIEMPRE una ruta de modulo completa, nunca un simbolo. El fallback a parent
+    que existia aqui enmascaraba imports rotos: ante
+    `from pgk_operativa.core.nonexistent import X`, el modulo `pgk_operativa.core`
+    si existe y devolvia True, ocultando que `nonexistent` no existe.
+    """
     parts = module.split(".")
     if parts[0] != "pgk_operativa":
         return True
-    # `import pgk_operativa` sin submodulo: el paquete raiz.
     if len(parts) == 1:
         return (src_root / "pgk_operativa" / "__init__.py").exists()
     rel = Path(*parts[1:])
     as_package = src_root / "pgk_operativa" / rel / "__init__.py"
     as_module = src_root / "pgk_operativa" / rel.with_suffix(".py")
-    if as_package.exists() or as_module.exists():
-        return True
-    # puede ser un simbolo importado from un modulo: probar con parent
-    if len(parts) > 2:
-        parent = ".".join(parts[:-1])
-        return _resolve(parent, src_root)
-    return False
+    return as_package.exists() or as_module.exists()
 
 
 def run(manifest: Manifest, repo_root: Path, repos_root: Path) -> list[Finding]:

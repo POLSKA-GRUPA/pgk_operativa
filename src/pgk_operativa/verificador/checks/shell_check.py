@@ -37,8 +37,17 @@ def _is_empty_body(node: ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef) 
     return False
 
 
-def _iter_named(tree: ast.AST) -> list[tuple[str, ast.AST]]:
-    items: list[tuple[str, ast.AST]] = []
+_Named = ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef
+
+
+def _iter_named(tree: ast.AST) -> list[tuple[str, _Named]]:
+    """Recorre el arbol y devuelve (name, node) para funciones y clases.
+
+    El tipo de retorno estrecha `_Named` para que el caller no necesite
+    re-chequear con isinstance, evitando codigo muerto inducido por el
+    tipo laxo `ast.AST` anterior.
+    """
+    items: list[tuple[str, _Named]] = []
     for node in ast.walk(tree):
         if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
             items.append((node.name, node))
@@ -69,8 +78,6 @@ def run(manifest: Manifest, repo_root: Path, repos_root: Path) -> list[Finding]:
             continue
 
         for name, node in _iter_named(tree):
-            if not isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
-                continue
             if _is_empty_body(node):
                 is_protocol_like = (
                     name.startswith("_") or name.endswith("Protocol") or name.endswith("Base")
