@@ -214,7 +214,7 @@ class TestLegalHelpers:
 
     def test_extraer_fuentes_legales_stsj_y_ccom_son_alcanzables(self) -> None:
         """STSJ y CCom deben matchear patrones especificos, no los genericos STS/CC."""
-        resp = "Segun la STSJ Cataluna 123/2024\nEl CCom articulo 30 regula"
+        resp = "Segun la STSJ Cataluna 123/2024\nEl CCom regula la materia mercantil"
         fuentes = legal.extraer_fuentes_legales(resp)
         assert len(fuentes) == 2
         assert any("STSJ" in f for f in fuentes)
