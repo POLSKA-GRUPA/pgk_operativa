@@ -131,14 +131,22 @@ def extraer_asientos(respuesta: str) -> list[str]:
 def extraer_modelos(respuesta: str) -> list[str]:
     """Extrae modelos AEAT mencionados (303, 130, 111, etc.).
 
-    Busca patrones `modelo NNN` y `mod. NNN` en minusculas. Devuelve
-    lista unica en el orden original de aparicion.
+    Busca patrones `modelo NNN` y `mod. NNN` en minusculas con
+    comprobacion de limite de palabra: si el siguiente caracter es un
+    digito, no es match (evita "modelo 2002" -> 200 falso positivo).
+    Devuelve lista unica en el orden original de aparicion.
     """
     lower = respuesta.lower()
     encontrados: list[str] = []
     for modelo in _MODELOS_AEAT:
-        if f"modelo {modelo}" in lower or f"mod. {modelo}" in lower:
-            encontrados.append(modelo)
+        for prefijo in (f"modelo {modelo}", f"mod. {modelo}"):
+            idx = lower.find(prefijo)
+            while idx != -1:
+                fin = idx + len(prefijo)
+                if fin >= len(lower) or not lower[fin].isdigit():
+                    encontrados.append(modelo)
+                    break
+                idx = lower.find(prefijo, idx + 1)
     return list(dict.fromkeys(encontrados))
 
 

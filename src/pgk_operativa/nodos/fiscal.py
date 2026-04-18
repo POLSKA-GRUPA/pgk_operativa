@@ -41,7 +41,9 @@ _PATRONES_FUENTES_FISCAL: tuple[str, ...] = (
 )
 
 _KEYWORDS_RECOMENDACIONES: tuple[str, ...] = (
+    "recomien",
     "recomend",
+    "sugier",
     "suger",
     "aconsej",
     "debe",

@@ -64,10 +64,27 @@ class TestFiscalHelpers:
             "Recomiendo revisar la documentacion\n"
             "Es importante verificar el convenio\n"
             "Debe presentar el 210 antes del 31/12\n"
-            "Frase sin recomendacion\n"
+            "Sugiero aplicar el convenio doble imposicion\n"
+            "Linea completamente neutra\n"
         )
         recs = fiscal.extraer_recomendaciones(resp)
-        assert len(recs) == 3
+        assert len(recs) == 4
+        assert any("Recomiendo" in r for r in recs)
+        assert any("importante" in r for r in recs)
+        assert any("Debe presentar" in r for r in recs)
+        assert any("Sugiero" in r for r in recs)
+        assert not any("neutra" in r for r in recs)
+
+    def test_extraer_recomendaciones_matches_stem_changing_verbs(self) -> None:
+        """Spanish e→ie stem change: recomend* no matchea recomiendo, hay que cubrir recomien*."""
+        resp = (
+            "Recomiendo presentar el modelo 210\n"
+            "Se recomienda revisar el convenio\n"
+            "Sugiero aplicar la retencion\n"
+            "Se sugiere consultar con experto\n"
+        )
+        recs = fiscal.extraer_recomendaciones(resp)
+        assert len(recs) == 4
 
     def test_extraer_recomendaciones_fallback_si_vacio(self) -> None:
         recs = fiscal.extraer_recomendaciones("Texto neutro sin accionables")
@@ -132,6 +149,21 @@ class TestContableHelpers:
         resp = "Modelo 303 y luego otra vez Modelo 303 y mod. 303"
         modelos = contable.extraer_modelos(resp)
         assert modelos == ["303"]
+
+    def test_extraer_modelos_word_boundary(self) -> None:
+        """modelo 2002 no debe matchear 200; mod. 3031 no debe matchear 303."""
+        resp = (
+            "Cita apocrifa: modelo 2002 no existe en AEAT\n"
+            "Tampoco mod. 3031 es valido\n"
+            "Pero si el Modelo 200 (IS) y mod. 303 (IVA)\n"
+        )
+        modelos = contable.extraer_modelos(resp)
+        assert "200" in modelos
+        assert "303" in modelos
+        # 2002 y 3031 no son modelos reales; no deben aparecer por substring
+        # El unico modo de que "200" aparezca es por la linea tercera (Modelo 200).
+        assert len([m for m in modelos if m == "200"]) == 1
+        assert len([m for m in modelos if m == "303"]) == 1
 
     def test_extraer_pasos_aon_keywords(self) -> None:
         resp = (
