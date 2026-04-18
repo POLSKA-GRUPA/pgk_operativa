@@ -211,8 +211,16 @@ def verificar(
     # Sin esta guarda, `--pr 0` generaba `PR-0000.yaml` (no existe: el
     # numerado empieza en 1) y `--pr -5` generaba `PR--005.yaml` (Path
     # invalido). En ambos casos terminaba en FileNotFoundError confuso.
-    if pr is not None and pr <= 0:
-        console.print(f"[red]Error:[/red] --pr debe ser entero positivo, got {pr}.")
+    # El limite superior (9999) replica la guarda de
+    # Manifest.load_by_pr_number: el convenio PR-NNNN.yaml pad-cero solo
+    # a 4 digitos, asi que --pr 10000 seria inconsistente con list_manifests
+    # (filtra por regex \d{4}) y el manifest cargado nunca se devolveria
+    # al iterar con --all.
+    if pr is not None and (pr <= 0 or pr > 9999):
+        console.print(
+            f"[red]Error:[/red] --pr fuera de rango [1, 9999], got {pr}. "
+            "El convenio PR-NNNN.yaml limita a 4 digitos."
+        )
         raise typer.Exit(code=2)
 
     manifests: list[Path]

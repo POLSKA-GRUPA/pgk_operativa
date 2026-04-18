@@ -970,3 +970,48 @@ def test_shell_check_skips_abstractmethod(tmp_path: Path) -> None:
     assert any("metodo_vacio_sin_excusa" in m for m in mensajes), (
         f"vacio sin decorador SI debe flagar: {mensajes}"
     )
+
+
+def test_shell_check_skips_exception_marker_classes(tmp_path: Path) -> None:
+    """Regresion Bug #32: clases de excepcion idiomaticas con `pass` son validas.
+
+    `class FooError(Exception): pass` es un idioma universal en Python:
+    la subclase marker hereda toda la logica de la base y se distingue solo
+    por identidad. Sin esta whitelist, el check disparaba HIGH contra cada
+    excepcion personalizada en los 7 repos origen (conta-pgk tiene ~15,
+    PGK_Empresa_Autonoma ~8, laboral-desk 6+), generando ruido masivo.
+
+    Se detectan tres patrones:
+      - Nombre con sufijo Error/Exception/Warning (convencion PEP 8)
+      - Herencia directa de `Exception`, `ValueError`, etc.
+      - Herencia de atributo tipo `exceptions.FooError`
+    """
+    (tmp_path / "mod.py").write_text(
+        "class DuplicateKey(Exception):\n"
+        "    pass\n"
+        "\n"
+        "class ClienteNoEncontradoError(ValueError):\n"
+        "    pass\n"
+        "\n"
+        "class AeatWarning(Warning):\n"
+        "    pass\n"
+        "\n"
+        "class BaseError(Exception):\n"
+        "    pass\n"
+        "\n"
+        "class RealShellSinBase:\n"
+        "    pass\n",
+        encoding="utf-8",
+    )
+    archivo = ArchivoManifest(target="mod.py", relacion=Relacion.ADAPTADO, origen=None, notas="")
+    findings = _run_shell(_make_manifest([archivo]), tmp_path, tmp_path)
+    mensajes = [f.mensaje for f in findings]
+    # Las excepciones idiomaticas no deben flagar
+    for nombre in ("DuplicateKey", "ClienteNoEncontradoError", "AeatWarning", "BaseError"):
+        assert not any(f"'{nombre}'" in m for m in mensajes), (
+            f"'{nombre}' no debe flagar como shell: {mensajes}"
+        )
+    # La clase sin base Exception-like SI debe flagar (caparazon real)
+    assert any("'RealShellSinBase'" in m for m in mensajes), (
+        f"caparazon real SI debe flagar: {mensajes}"
+    )

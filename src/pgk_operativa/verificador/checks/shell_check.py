@@ -83,6 +83,43 @@ def _has_allowed_empty_decorator(
 _Named = ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef
 
 
+# Sufijos de nombres que identifican clases de excepcion en la convencion
+# estandar de Python. `class FooError(Exception): pass` es un idioma valido
+# y comun: subclase marker con toda la logica heredada. Sin esta whitelist,
+# el check disparaba HIGH contra cada excepcion personalizada declarada en
+# copias literales de codigo origen, generando ruido masivo.
+_EXCEPTION_NAME_SUFFIXES: tuple[str, ...] = ("Error", "Exception", "Warning")
+
+
+def _is_exception_marker_class(node: _Named) -> bool:
+    """True si `node` es un ClassDef cuyo cuerpo vacio es idiomatico.
+
+    Una clase con cuerpo trivial es aceptable si:
+      - Su nombre termina en Error/Exception/Warning (convencion Python), o
+      - Hereda de una base que encaja con el patron de excepciones.
+
+    No intentamos ser exhaustivos con el arbol de herencia: basta con los
+    casos convencionales. `class _Base(Exception): pass` se captura por el
+    nombre empezando en `_` (ya existente) y ademas por tener base
+    Exception-like.
+    """
+    if not isinstance(node, ast.ClassDef):
+        return False
+    if node.name.endswith(_EXCEPTION_NAME_SUFFIXES):
+        return True
+    for base in node.bases:
+        base_name: str | None = None
+        if isinstance(base, ast.Name):
+            base_name = base.id
+        elif isinstance(base, ast.Attribute):
+            base_name = base.attr
+        if base_name is None:
+            continue
+        if base_name.endswith(_EXCEPTION_NAME_SUFFIXES) or base_name == "BaseException":
+            return True
+    return False
+
+
 def _iter_named(tree: ast.AST) -> list[tuple[str, _Named]]:
     """Recorre el arbol y devuelve (name, node) para funciones y clases.
 
@@ -128,6 +165,10 @@ def run(manifest: Manifest, repo_root: Path, repos_root: Path) -> list[Finding]:
             if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
                 if _has_allowed_empty_decorator(node):
                     continue
+            # Skip clases de excepcion idiomaticas: `class FooError(Exception): pass`
+            # es una subclase marker valida, no un caparazon vacio.
+            if _is_exception_marker_class(node):
+                continue
             is_protocol_like = (
                 name.startswith("_") or name.endswith("Protocol") or name.endswith("Base")
             )

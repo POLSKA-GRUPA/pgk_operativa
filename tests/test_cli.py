@@ -50,9 +50,18 @@ def test_verificar_rejects_pr_zero() -> None:
     """--pr 0 y --pr negativo deben fallar con exit 2, no con FileNotFoundError."""
     result = runner.invoke(app, ["verificar", "--pr", "0"])
     assert result.exit_code == 2
-    assert "positivo" in result.stdout or "positivo" in (result.stderr or "")
+    combined = result.stdout + (result.stderr or "")
+    assert "rango" in combined or "positivo" in combined
 
 
 def test_verificar_rejects_pr_negative() -> None:
     result = runner.invoke(app, ["verificar", "--pr", "-5"])
     assert result.exit_code == 2
+
+
+def test_verificar_rejects_pr_over_9999() -> None:
+    """--pr 10000 supera el padding PR-NNNN, debe rechazarse simetricamente."""
+    result = runner.invoke(app, ["verificar", "--pr", "10000"])
+    assert result.exit_code == 2
+    combined = result.stdout + (result.stderr or "")
+    assert "rango" in combined or "9999" in combined
