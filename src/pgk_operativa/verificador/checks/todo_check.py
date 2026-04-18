@@ -8,7 +8,7 @@ from pathlib import Path
 from pgk_operativa.verificador.manifest import Manifest
 from pgk_operativa.verificador.report import Finding, Severity
 
-_PATTERN = re.compile(r"\b(TODO|FIXME|XXX|HACK)\b[:\s](.*)$")
+_PATTERN = re.compile(r"\b(TODO|FIXME|XXX|HACK)\b(.*)$")
 _ISSUE = re.compile(r"#\d+|issue[-_ ]?\d+|PR-\d+", re.IGNORECASE)
 
 

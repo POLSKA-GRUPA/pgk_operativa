@@ -37,6 +37,49 @@ def _is_empty_body(node: ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef) 
     return False
 
 
+# Decoradores que HACEN que un cuerpo trivial sea correcto por diseno.
+# Sin esta whitelist, metodos abstractos (`@abstractmethod`), overloads
+# de tipos (`@overload`, `@typing.overload`) y property stubs legitimos
+# disparaban un falso positivo HIGH en el check.
+_ALLOWED_EMPTY_DECORATORS: frozenset[str] = frozenset(
+    {
+        "abstractmethod",
+        "abstractproperty",
+        "abstractclassmethod",
+        "abstractstaticmethod",
+        "overload",
+    }
+)
+
+
+def _decorator_name(dec: ast.expr) -> str | None:
+    """Extrae el nombre base de un decorator, ignorando el modulo.
+
+    Cubre los tres patrones habituales:
+        @abstractmethod           -> Name("abstractmethod")
+        @abc.abstractmethod       -> Attribute(value=Name("abc"), attr="abstractmethod")
+        @typing.overload          -> Attribute(value=Name("typing"), attr="overload")
+    """
+    if isinstance(dec, ast.Name):
+        return dec.id
+    if isinstance(dec, ast.Attribute):
+        return dec.attr
+    if isinstance(dec, ast.Call):
+        return _decorator_name(dec.func)
+    return None
+
+
+def _has_allowed_empty_decorator(
+    node: ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef,
+) -> bool:
+    """True si el nodo tiene un decorador que justifica cuerpo vacio."""
+    for dec in getattr(node, "decorator_list", []):
+        name = _decorator_name(dec)
+        if name is not None and name in _ALLOWED_EMPTY_DECORATORS:
+            return True
+    return False
+
+
 _Named = ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef
 
 
@@ -78,23 +121,29 @@ def run(manifest: Manifest, repo_root: Path, repos_root: Path) -> list[Finding]:
             continue
 
         for name, node in _iter_named(tree):
-            if _is_empty_body(node):
-                is_protocol_like = (
-                    name.startswith("_") or name.endswith("Protocol") or name.endswith("Base")
+            if not _is_empty_body(node):
+                continue
+            # Skip decoradores que hacen que el cuerpo vacio sea correcto
+            # (abstractmethod, overload, etc.). Solo aplica a funciones.
+            if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
+                if _has_allowed_empty_decorator(node):
+                    continue
+            is_protocol_like = (
+                name.startswith("_") or name.endswith("Protocol") or name.endswith("Base")
+            )
+            severity = Severity.MEDIUM if is_protocol_like else Severity.HIGH
+            if archivo.relacion == Relacion.COPIA_LITERAL:
+                severity = Severity.HIGH
+            findings.append(
+                Finding(
+                    check="shell",
+                    severity=severity,
+                    target=archivo.target,
+                    mensaje=f"'{name}' tiene cuerpo trivial (pass/NotImplementedError/...)",
+                    detalle=(
+                        f"Linea {getattr(node, 'lineno', '?')}. "
+                        "Si es intencional (protocol/stub), documentalo en notas del manifest."
+                    ),
                 )
-                severity = Severity.MEDIUM if is_protocol_like else Severity.HIGH
-                if archivo.relacion == Relacion.COPIA_LITERAL:
-                    severity = Severity.HIGH
-                findings.append(
-                    Finding(
-                        check="shell",
-                        severity=severity,
-                        target=archivo.target,
-                        mensaje=f"'{name}' tiene cuerpo trivial (pass/NotImplementedError/...)",
-                        detalle=(
-                            f"Linea {getattr(node, 'lineno', '?')}. "
-                            "Si es intencional (protocol/stub), documentalo en notas del manifest."
-                        ),
-                    )
-                )
+            )
     return findings

@@ -68,6 +68,36 @@ def _is_noop_test(func: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
     return True
 
 
+def _iter_test_functions(
+    tree: ast.Module,
+) -> list[ast.FunctionDef | ast.AsyncFunctionDef]:
+    """Devuelve SOLO tests top-level o metodos directos de clases.
+
+    `ast.walk` recorria todos los FunctionDef del arbol, lo que flagaba
+    como no-op a helpers anidados dentro de un test real:
+
+        def test_real():
+            def test_helper():  # <- anidada, NO es un test pytest
+                pass
+            assert condicion_real()
+
+    Pytest solo recoge tests de nivel modulo o metodos de clases `Test*`,
+    nunca funciones anidadas. Iteramos solo esos dos niveles para eliminar
+    el falso positivo.
+    """
+    out: list[ast.FunctionDef | ast.AsyncFunctionDef] = []
+    for node in tree.body:
+        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
+            if node.name.startswith("test_"):
+                out.append(node)
+        elif isinstance(node, ast.ClassDef):
+            for item in node.body:
+                if isinstance(item, ast.FunctionDef | ast.AsyncFunctionDef):
+                    if item.name.startswith("test_"):
+                        out.append(item)
+    return out
+
+
 def run(manifest: Manifest, repo_root: Path, repos_root: Path) -> list[Finding]:
     """Detecta tests cuya logica no aserta nada significativo."""
     _ = repos_root
@@ -83,11 +113,7 @@ def run(manifest: Manifest, repo_root: Path, repos_root: Path) -> list[Finding]:
             tree = ast.parse(source, filename=str(target))
         except (UnicodeDecodeError, SyntaxError):
             continue
-        for node in ast.walk(tree):
-            if not isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
-                continue
-            if not node.name.startswith("test_"):
-                continue
+        for node in _iter_test_functions(tree):
             if _is_noop_test(node):
                 findings.append(
                     Finding(

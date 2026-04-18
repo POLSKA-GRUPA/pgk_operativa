@@ -739,3 +739,142 @@ def test_todo_check_respects_escaped_quotes(tmp_path: Path) -> None:
     linea3 = "x = 1 \\\n    # TODO: continuacion"
     pos3 = linea3.find("TODO")
     assert _is_in_comment(linea3, pos3), "backslash fuera de string no es escape"
+
+
+def test_tests_check_ignores_nested_helper_functions(tmp_path: Path) -> None:
+    """Regresion Bug #26: ast.walk flagaba helpers anidados como no-op.
+
+    Un test real contiene a veces funciones anidadas de ayuda cuyo nombre
+    empieza por `test_` (por ejemplo, `test_inner` dentro de `test_outer`
+    al parametrizar manualmente). Pytest NO las recoge como tests, pero
+    `ast.walk` si las visitaba, generando un falso positivo HIGH.
+
+    Solo deben iterarse tests top-level o metodos directos de clases.
+    """
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "tests" / "test_real.py").write_text(
+        "def test_outer() -> None:\n"
+        "    def test_helper() -> None:\n"
+        "        pass\n"
+        "    valor = 1 + 1\n"
+        "    assert valor == 2\n",
+        encoding="utf-8",
+    )
+    archivo = ArchivoManifest(
+        target="tests/test_real.py", relacion=Relacion.NUEVO, origen=None, notas=""
+    )
+    findings = _run_tests_check(_make_manifest([archivo]), tmp_path, tmp_path)
+    # test_helper NO debe estar en findings (es nested, no pytest-visible).
+    # test_outer NO debe estar en findings (tiene assert real).
+    assert findings == [], f"No deberia haber findings, obtuvo: {findings}"
+
+
+def test_tests_check_detects_noop_in_class_method(tmp_path: Path) -> None:
+    """Tests dentro de clases Test* si son recogidos por pytest y se analizan."""
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "tests" / "test_class.py").write_text(
+        "class TestFoo:\n"
+        "    def test_good(self) -> None:\n"
+        "        assert 1 + 1 == 2\n"
+        "    def test_noop(self) -> None:\n"
+        "        assert True\n",
+        encoding="utf-8",
+    )
+    archivo = ArchivoManifest(
+        target="tests/test_class.py", relacion=Relacion.NUEVO, origen=None, notas=""
+    )
+    findings = _run_tests_check(_make_manifest([archivo]), tmp_path, tmp_path)
+    mensajes = [f.mensaje for f in findings]
+    assert any("test_noop" in m for m in mensajes), f"test_noop debe flagarse: {mensajes}"
+    assert not any("test_good" in m for m in mensajes), f"test_good NO: {mensajes}"
+
+
+def test_todo_check_matches_todo_with_parens(tmp_path: Path) -> None:
+    """Regresion Bug #28: regex exigia `:` o whitespace justo tras TODO.
+
+    El patron anterior `\\b(TODO|FIXME|XXX|HACK)\\b[:\\s](.*)$` requeria
+    un `:` o whitespace inmediato tras el keyword. Formas muy comunes
+    quedaban fuera:
+        # TODO(kenyi): revisar  -> '(' no matchea [:\\s]
+        # TODO.revisar pronto   -> '.' no matchea [:\\s]
+        # TODO                  -> EOL no matchea [:\\s]
+
+    El nuevo patron `\\b(TODO|FIXME|XXX|HACK)\\b(.*)$` se apoya en `\\b`
+    (word boundary) como unico separador, cubriendo todas las variantes.
+    """
+    (tmp_path / "mod.py").write_text(
+        "# TODO(kenyi): revisar esto pronto\n"
+        "# FIXME.otro caso sin dos puntos\n"
+        "# TODO\n"
+        "# TODO: con issue #123 valido\n"
+        "msg = 'TODO dentro de string, no es bug'\n",
+        encoding="utf-8",
+    )
+    archivo = ArchivoManifest(target="mod.py", relacion=Relacion.NUEVO, origen=None, notas="")
+    findings = _run_todo(_make_manifest([archivo]), tmp_path, tmp_path)
+    mensajes = [(f.detalle or "", f.mensaje) for f in findings]
+    # Debe capturar TODO(kenyi), FIXME.otro, bare TODO
+    assert any("TODO(kenyi)" in detalle for detalle, _ in mensajes), (
+        f"TODO(...) debe flagar: {mensajes}"
+    )
+    assert any("FIXME.otro" in detalle for detalle, _ in mensajes), (
+        f"FIXME.otro debe flagar: {mensajes}"
+    )
+    # El TODO con issue #123 NO debe flagar
+    assert not any("con issue" in detalle for detalle, _ in mensajes), (
+        f"TODO con issue no flaga: {mensajes}"
+    )
+    # El TODO dentro de string NO debe flagar (is_in_comment=False)
+    assert not any("dentro de string" in detalle for detalle, _ in mensajes), (
+        f"TODO en string no flaga: {mensajes}"
+    )
+
+
+def test_shell_check_skips_abstractmethod(tmp_path: Path) -> None:
+    """Regresion Bug #27: @abstractmethod con cuerpo trivial es correcto por diseno.
+
+    Sin el whitelist de decoradores, metodos abstractos legitimos
+    (`@abstractmethod`, `@abc.abstractmethod`, `@overload`, `@typing.overload`)
+    generaban un falso positivo HIGH en shell_check. El codigo de PGK tiene
+    varias clases base abstractas (CFO Agent, laboral engine, consejo agents)
+    con este patron.
+    """
+    (tmp_path / "mod.py").write_text(
+        "from abc import ABC, abstractmethod\n"
+        "from typing import overload\n"
+        "import typing\n"
+        "\n"
+        "class Base(ABC):\n"
+        "    @abstractmethod\n"
+        "    def procesar(self, x: int) -> int:\n"
+        "        ...\n"
+        "\n"
+        "    @overload\n"
+        "    def calcular(self, x: int) -> int: ...\n"
+        "    @overload\n"
+        "    def calcular(self, x: str) -> str: ...\n"
+        "    def calcular(self, x):\n"
+        "        return x\n"
+        "\n"
+        "    @typing.overload\n"
+        "    def otra(self, x: int) -> int: ...\n"
+        "    def otra(self, x):\n"
+        "        return x\n"
+        "\n"
+        "    def metodo_vacio_sin_excusa(self):\n"
+        "        pass\n",
+        encoding="utf-8",
+    )
+    archivo = ArchivoManifest(target="mod.py", relacion=Relacion.ADAPTADO, origen=None, notas="")
+    findings = _run_shell(_make_manifest([archivo]), tmp_path, tmp_path)
+    mensajes = [f.mensaje for f in findings]
+    # abstractmethod, overload, typing.overload NO deben flagar
+    assert not any("'procesar'" in m for m in mensajes), (
+        f"@abstractmethod no debe flagar: {mensajes}"
+    )
+    assert not any("'calcular'" in m for m in mensajes), f"@overload no debe flagar: {mensajes}"
+    assert not any("'otra'" in m for m in mensajes), f"@typing.overload no debe flagar: {mensajes}"
+    # El vacio sin decorador SI debe flagar
+    assert any("metodo_vacio_sin_excusa" in m for m in mensajes), (
+        f"vacio sin decorador SI debe flagar: {mensajes}"
+    )
