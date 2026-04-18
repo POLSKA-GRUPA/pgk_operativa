@@ -363,6 +363,71 @@ def test_imports_check_does_not_match_sibling_package(tmp_path: Path) -> None:
     assert not findings
 
 
+def test_imports_check_catches_broken_relative_import(tmp_path: Path) -> None:
+    """Bug #29: `from .inexistente import X` no se validaba antes.
+
+    El check filtraba `node.level == 0` y los relativos pasaban silenciosamente
+    aunque apuntaran a modulos que no existen.
+    """
+    core = tmp_path / "src" / "pgk_operativa" / "core"
+    core.mkdir(parents=True)
+    (tmp_path / "src" / "pgk_operativa" / "__init__.py").write_text("", encoding="utf-8")
+    (core / "__init__.py").write_text("", encoding="utf-8")
+    (core / "router.py").write_text(
+        "from .inexistente import X\nvalor = X\n",
+        encoding="utf-8",
+    )
+    archivo = ArchivoManifest(
+        target="src/pgk_operativa/core/router.py",
+        relacion=Relacion.NUEVO,
+        origen=None,
+        notas="",
+    )
+    findings = _run_imports(_make_manifest([archivo]), tmp_path, tmp_path)
+    assert any("pgk_operativa.core.inexistente" in f.mensaje for f in findings), findings
+
+
+def test_imports_check_accepts_valid_relative_import(tmp_path: Path) -> None:
+    """Relativos que resuelven bien no deben generar findings."""
+    core = tmp_path / "src" / "pgk_operativa" / "core"
+    core.mkdir(parents=True)
+    (tmp_path / "src" / "pgk_operativa" / "__init__.py").write_text("", encoding="utf-8")
+    (core / "__init__.py").write_text("", encoding="utf-8")
+    (core / "paths.py").write_text("REPO_ROOT = 1\n", encoding="utf-8")
+    (core / "router.py").write_text(
+        "from .paths import REPO_ROOT\nx = REPO_ROOT\n",
+        encoding="utf-8",
+    )
+    archivo = ArchivoManifest(
+        target="src/pgk_operativa/core/router.py",
+        relacion=Relacion.NUEVO,
+        origen=None,
+        notas="",
+    )
+    findings = _run_imports(_make_manifest([archivo]), tmp_path, tmp_path)
+    assert not findings, [f.mensaje for f in findings]
+
+
+def test_imports_check_catches_relative_climb_above_package(tmp_path: Path) -> None:
+    """`from ... import X` desde core/ escapa por encima de pgk_operativa."""
+    core = tmp_path / "src" / "pgk_operativa" / "core"
+    core.mkdir(parents=True)
+    (tmp_path / "src" / "pgk_operativa" / "__init__.py").write_text("", encoding="utf-8")
+    (core / "__init__.py").write_text("", encoding="utf-8")
+    (core / "router.py").write_text(
+        "from ... import algo\n",
+        encoding="utf-8",
+    )
+    archivo = ArchivoManifest(
+        target="src/pgk_operativa/core/router.py",
+        relacion=Relacion.NUEVO,
+        origen=None,
+        notas="",
+    )
+    findings = _run_imports(_make_manifest([archivo]), tmp_path, tmp_path)
+    assert any("relativo invalido" in f.mensaje for f in findings), findings
+
+
 def test_manifests_dir_resolves() -> None:
     md = manifests_dir()
     assert md.name == "pr_manifests"
