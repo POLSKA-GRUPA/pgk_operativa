@@ -1,0 +1,151 @@
+pr: 4
+fecha: "2026-04-17"
+titulo: "Semana 2 - Descomposicion modular + subgraph consenso opt-in"
+archivos:
+  # Descomposicion de ejecutor.py en 7 nodos modulo-especificos + base compartida
+  - target: src/pgk_operativa/nodos/_base.py
+    relacion: inspirado
+    origen:
+      repo: PGK_Empresa_Autonoma
+      path: src/agents/nodos.py
+    notas: |
+      Base compartida por los 7 nodos modulares. Extrae _invoke_llm() y
+      _append_audit() del ejecutor monolitico de PR #2. Inspirado en los
+      helpers privados del origen (p.ej. _telemetry_record_llm_call,
+      _memoria_guardar_aprendizaje); no copia literal, solo patron.
+
+  - target: src/pgk_operativa/nodos/fiscal.py
+    relacion: adaptado
+    origen:
+      repo: PGK_Empresa_Autonoma
+      path: src/agents/nodos.py
+      simbolos: ["nodo_gran_dragon"]
+    notas: |
+      Nodo modulo fiscal. Adaptado: origen usa personalidad Gran Dragon
+      con Perplexity tools. Aqui solo carga prompt fiscal y delega al
+      LLM. Sin nombre de personaje (regla 2 AGENTS.md).
+
+  - target: src/pgk_operativa/nodos/contable.py
+    relacion: adaptado
+    origen:
+      repo: PGK_Empresa_Autonoma
+      path: src/agents/nodos.py
+      simbolos: ["nodo_edu"]
+    notas: |
+      Nodo modulo contable. Adaptado del nodo Edu (asesor contable).
+      Integracion real con conta-pgk-hispania es Semana 3.
+
+  - target: src/pgk_operativa/nodos/legal.py
+    relacion: adaptado
+    origen:
+      repo: PGK_Empresa_Autonoma
+      path: src/agents/nodos.py
+      simbolos: ["nodo_german"]
+    notas: |
+      Nodo modulo legal. Adaptado del nodo German (derecho). Integracion
+      con skills de junior es Semana 3.
+
+  - target: src/pgk_operativa/nodos/laboral.py
+    relacion: nuevo
+    notas: |
+      Nodo modulo laboral. No hay nodo equivalente en PGK_Empresa_Autonoma
+      (el laboral esta en pgk-laboral-desk como motor independiente).
+      Aqui stub que se integrara con el motor determinista en Semana 3.
+
+  - target: src/pgk_operativa/nodos/marketing.py
+    relacion: adaptado
+    origen:
+      repo: PGK_Empresa_Autonoma
+      path: src/agents/nodos.py
+      simbolos: ["nodo_mark"]
+    notas: Nodo modulo marketing. Adaptado del nodo Mark (SEO).
+
+  - target: src/pgk_operativa/nodos/docs.py
+    relacion: adaptado
+    origen:
+      repo: PGK_Empresa_Autonoma
+      path: src/agents/nodos.py
+      simbolos: ["nodo_paloma"]
+    notas: |
+      Nodo modulo docs (documentacion/comunicaciones). Adaptado de
+      Paloma.
+
+  - target: src/pgk_operativa/nodos/calidad.py
+    relacion: adaptado
+    origen:
+      repo: PGK_Empresa_Autonoma
+      path: src/agents/nodos.py
+      simbolos: ["nodo_jennifer"]
+    notas: Nodo modulo calidad. Adaptado de Jennifer (limpieza y calidad).
+
+  - target: src/pgk_operativa/core/graph.py
+    relacion: adaptado
+    origen:
+      repo: PGK_Empresa_Autonoma
+      path: src/graphs/main_graph.py
+    notas: |
+      Conditional routing: tras router Ana, elige nodo segun modulo_destino.
+      Extiende el grafo minimo de PR #2 con 7 nodos paralelos.
+
+  # Consenso: subgraph inspirado en SharedReasoningDiary de PROGRAMADOR_FRIKI_PGK
+  - target: src/pgk_operativa/core/consenso/__init__.py
+    relacion: nuevo
+    notas: Paquete consenso. Exporta subgraph + state + agreement.
+
+  - target: src/pgk_operativa/core/consenso/state.py
+    relacion: inspirado
+    origen:
+      repo: PROGRAMADOR_FRIKI_PGK
+      path: orchestrator/orchestrator.py
+      simbolos: ["SharedReasoningDiary"]
+    notas: |
+      Estado tipado del consenso: dos respuestas independientes +
+      score de acuerdo + veredicto. Inspirado pero no copiado: el origen
+      es un diario compartido entre N agentes; aqui es estado entre
+      exactamente 2 proveedores.
+
+  - target: src/pgk_operativa/core/consenso/agreement.py
+    relacion: nuevo
+    notas: |
+      Score Jaccard entre dos respuestas LLM. Escrito desde cero; no hay
+      equivalente directo en repos origen (el origen usa voting con
+      pesos, aqui similitud de texto).
+
+  - target: src/pgk_operativa/core/consenso/circuit_breaker.py
+    relacion: inspirado
+    origen:
+      repo: PGK_Empresa_Autonoma
+      path: src/core/circuit_breaker.py
+    notas: |
+      Circuit breaker con 3 estados (cerrado/abierto/semiabierto),
+      cooldown y contador de fallos. Inspirado en el circuit breaker
+      global del origen, simplificado para scope de consenso (solo
+      proteje llamadas LLM secundarias).
+
+  - target: src/pgk_operativa/core/consenso/subgraph.py
+    relacion: inspirado
+    origen:
+      repo: PROGRAMADOR_FRIKI_PGK
+      path: orchestrator/orchestrator.py
+    notas: |
+      Subgraph LangGraph que dispara 2 proveedores en paralelo, calcula
+      agreement, decide veredicto. Assert explicito provider_A !=
+      provider_B AND model_A != model_B (regla 5 AGENTS.md).
+      Inspirado en orchestrator multi-agente del origen; aqui version
+      reducida: 2 actores, opt-in via flag --consenso.
+
+  - target: tests/test_consenso.py
+    relacion: nuevo
+    notas: "28 tests - agreement + circuit breaker + subgraph."
+
+  - target: tests/test_graph.py
+    relacion: nuevo
+    notas: |
+      Tests actualizados para los 7 nodos. No hay tests equivalentes
+      directos en el origen (PGK_Empresa_Autonoma tiene tests separados
+      por agente en tests/agents/). Mock paths de LLM e importaciones
+      reflejan la descomposicion propia de este repo.
+
+  - target: tests/test_router.py
+    relacion: nuevo
+    notas: Tests routing condicional hacia el nodo correcto.

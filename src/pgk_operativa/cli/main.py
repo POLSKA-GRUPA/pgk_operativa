@@ -8,6 +8,8 @@ Subcomandos iniciales (esqueleto):
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import typer
 from rich.console import Console
 from rich.table import Table
@@ -22,6 +24,9 @@ from pgk_operativa.core.paths import (
     engram_path,
     memoria_operativa_path,
 )
+from pgk_operativa.verificador.auditor import audit, default_repos_root, informes_dir
+from pgk_operativa.verificador.manifest import Manifest, list_manifests, manifests_dir
+from pgk_operativa.verificador.report import Severity
 
 app = typer.Typer(
     help="pgk_operativa: super-agente unificado PGK.",
@@ -152,6 +157,120 @@ def doctor() -> None:
         )
 
     console.print(table)
+
+
+@app.command()
+def verificar(
+    pr: int | None = typer.Option(
+        None, "--pr", help="Numero de PR a auditar. Si se omite, auditar --all."
+    ),
+    todos: bool = typer.Option(False, "--all", help="Audita todos los manifests disponibles."),
+    repos_root: Path | None = typer.Option(
+        None,
+        "--repos-root",
+        help="Directorio raiz de repos origen. Default: ~/repos/.",
+        exists=False,
+    ),
+    salida: Path | None = typer.Option(
+        None,
+        "--salida",
+        help="Directorio destino de informes. Default: informes/auditoria/.",
+    ),
+    bloquear_high: bool = typer.Option(
+        False,
+        "--bloquear-high",
+        help="Sale con codigo 3 si hay HIGH (ademas del 2 por CRITICAL).",
+    ),
+    semantico: bool = typer.Option(
+        False,
+        "--semantico",
+        help="Anade check LLM (Z.ai GLM-4.6) que compara origen con destino. Coste extra.",
+    ),
+) -> None:
+    """Auditor hacia atras: verifica fidelidad de un PR contra su manifest.
+
+    Genera informe Markdown en `informes/auditoria/PR-XXXX.md`.
+
+    Exit codes:
+    - 0: sin hallazgos CRITICAL.
+    - 2: al menos un hallazgo CRITICAL (bloquea merge), o error de carga
+      del manifest cuando no hay hallazgos de mayor prioridad.
+    - 3: con --bloquear-high, al menos un hallazgo HIGH.
+    """
+    rr = repos_root or default_repos_root()
+    out_dir = salida or informes_dir()
+
+    if pr is not None and todos:
+        console.print("[red]Error:[/red] --pr y --all son mutuamente excluyentes.")
+        raise typer.Exit(code=2)
+
+    if pr is None and not todos:
+        console.print("[yellow]Uso:[/yellow] pgk verificar --pr N  |  pgk verificar --all")
+        raise typer.Exit(code=2)
+
+    # Sin esta guarda, `--pr 0` generaba `PR-0000.yaml` (no existe: el
+    # numerado empieza en 1) y `--pr -5` generaba `PR--005.yaml` (Path
+    # invalido). En ambos casos terminaba en FileNotFoundError confuso.
+    # El limite superior (9999) replica la guarda de
+    # Manifest.load_by_pr_number: el convenio PR-NNNN.yaml pad-cero solo
+    # a 4 digitos, asi que --pr 10000 seria inconsistente con list_manifests
+    # (filtra por regex \d{4}) y el manifest cargado nunca se devolveria
+    # al iterar con --all.
+    if pr is not None and (pr <= 0 or pr > 9999):
+        console.print(
+            f"[red]Error:[/red] --pr fuera de rango [1, 9999], got {pr}. "
+            "El convenio PR-NNNN.yaml limita a 4 digitos."
+        )
+        raise typer.Exit(code=2)
+
+    manifests: list[Path]
+    if pr is not None:
+        manifests = [manifests_dir() / f"PR-{pr:04d}.yaml"]
+    else:
+        manifests = list_manifests()
+        if not manifests:
+            console.print(f"[yellow]No hay manifests en {manifests_dir()}.[/yellow]")
+            raise typer.Exit(code=0)
+
+    any_critical = False
+    any_high = False
+    any_load_error = False
+    for manifest_path in manifests:
+        try:
+            manifest = Manifest.load(manifest_path)
+        except (FileNotFoundError, ValueError) as exc:
+            console.print(f"[red]Error leyendo {manifest_path.name}:[/red] {exc}")
+            any_load_error = True
+            continue
+
+        report = audit(manifest, repo_root=REPO_ROOT, repos_root=rr, semantico=semantico)
+        out_path = out_dir / f"PR-{manifest.pr:04d}.md"
+        report.save(out_path)
+
+        table = Table(title=f"PR #{manifest.pr:04d} - {manifest.titulo}", show_header=True)
+        table.add_column("Severidad")
+        table.add_column("N")
+        for sev in (Severity.CRITICAL, Severity.HIGH, Severity.MEDIUM, Severity.LOW):
+            n = len(report.by_severity(sev))
+            color = {"CRITICAL": "red", "HIGH": "yellow", "MEDIUM": "cyan", "LOW": "dim"}[sev.label]
+            table.add_row(f"[{color}]{sev.label}[/{color}]", str(n))
+        console.print(table)
+        console.print(f"[dim]Informe: {out_path}[/dim]")
+
+        if report.has_critical:
+            any_critical = True
+        if report.has_high:
+            any_high = True
+
+    # Prioridad explicita: CRITICAL > HIGH (cuando --bloquear-high) > error de carga > OK.
+    # Jamas enmascarar CRITICAL con un codigo mayor. Error de carga es la prioridad
+    # mas baja entre las fallas: solo reporta exit 2 si no hubo HIGH con bloqueo activo.
+    if any_critical:
+        raise typer.Exit(code=2)
+    if bloquear_high and any_high:
+        raise typer.Exit(code=3)
+    if any_load_error:
+        raise typer.Exit(code=2)
 
 
 @app.command("admin-alta")

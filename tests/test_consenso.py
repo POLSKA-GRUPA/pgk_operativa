@@ -18,6 +18,7 @@ from pgk_operativa.core.consenso.agreement import (
 )
 from pgk_operativa.core.consenso.circuit_breaker import CircuitBreaker
 from pgk_operativa.core.consenso.subgraph import build_consenso_subgraph, run_consenso
+from pgk_operativa.core.llm import Provider, pick_consensus_pair
 
 # ---------------------------------------------------------------------------
 # C.4 Agreement tests
@@ -286,3 +287,80 @@ class TestGoldenStubs:
 
         assert result["consensus_type"] == "single_model"
         # No crash
+
+
+# ---------------------------------------------------------------------------
+# Bug #31: pick_consensus_pair debe cubrir TODAS las combinaciones
+# ---------------------------------------------------------------------------
+
+
+class TestAgreementCaseInsensitive:
+    """Regresion Bug #32: calcular_acuerdo no normalizaba case, asi que
+    'Modelo 210' y 'modelo 210' contaban como distintos en Jaccard.
+    """
+
+    def test_modelo_case_different_gives_high_agreement(self) -> None:
+        a = "Presenta el Modelo 210 segun la Ley 35/2006."
+        b = "presenta el modelo 210 segun la ley 35/2006."
+        sint, _sem = calcular_acuerdo(a, b)
+        assert sint >= 0.9, f"sintactico deberia ser ~1.0 con solo case diff: {sint}"
+
+    def test_eur_case_different_gives_high_agreement(self) -> None:
+        a = "La cuota es 1500 EUR al trimestre."
+        b = "la cuota es 1500 eur al trimestre."
+        sint, _sem = calcular_acuerdo(a, b)
+        assert sint >= 0.5, f"sintactico deberia ser alto pese a case diff: {sint}"
+
+
+class TestPickConsensusPairCoverage:
+    """Regresion Bug #31: la lista hardcoded de pares no cubria OPENAI ni
+    todas las combinaciones con DEEPSEEK. Usuarios con solo ZAI+OPENAI
+    o OPENAI+DEEPSEEK recibian None pese a tener 2 proveedores validos
+    y degradaban silenciosamente a single_model sin diagnostico.
+    """
+
+    def test_zai_plus_openai_returns_pair(self) -> None:
+        with patch(
+            "pgk_operativa.core.llm.available_providers",
+            return_value=[Provider.ZAI, Provider.OPENAI],
+        ):
+            pair = pick_consensus_pair()
+        assert pair is not None
+        a, b = pair
+        assert {a.provider, b.provider} == {Provider.ZAI, Provider.OPENAI}
+        assert a.model != b.model
+
+    def test_openai_plus_deepseek_returns_pair(self) -> None:
+        with patch(
+            "pgk_operativa.core.llm.available_providers",
+            return_value=[Provider.OPENAI, Provider.DEEPSEEK],
+        ):
+            pair = pick_consensus_pair()
+        assert pair is not None
+        a, b = pair
+        assert {a.provider, b.provider} == {Provider.OPENAI, Provider.DEEPSEEK}
+
+    def test_anthropic_plus_deepseek_returns_pair(self) -> None:
+        with patch(
+            "pgk_operativa.core.llm.available_providers",
+            return_value=[Provider.ANTHROPIC, Provider.DEEPSEEK],
+        ):
+            pair = pick_consensus_pair()
+        assert pair is not None
+
+    def test_single_provider_returns_none(self) -> None:
+        with patch(
+            "pgk_operativa.core.llm.available_providers",
+            return_value=[Provider.ZAI],
+        ):
+            assert pick_consensus_pair() is None
+
+    def test_prefers_zai_first(self) -> None:
+        """Con multiples disponibles, ZAI aparece como A por preferencia."""
+        with patch(
+            "pgk_operativa.core.llm.available_providers",
+            return_value=[Provider.DEEPSEEK, Provider.ZAI, Provider.OPENAI],
+        ):
+            pair = pick_consensus_pair()
+        assert pair is not None
+        assert pair[0].provider == Provider.ZAI
