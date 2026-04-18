@@ -207,6 +207,19 @@ class TestLegalHelpers:
     def test_extraer_fuentes_legales_vacio(self) -> None:
         assert legal.extraer_fuentes_legales("") == []
 
+    def test_extraer_fuentes_legales_no_confunde_cc_con_ccaa(self) -> None:
+        """CCAA (Comunidades Autonomas) no debe matchear 'CC' (Codigo Civil)."""
+        resp = "Las CCAA tienen competencia exclusiva en esta materia"
+        assert legal.extraer_fuentes_legales(resp) == []
+
+    def test_extraer_fuentes_legales_stsj_y_ccom_son_alcanzables(self) -> None:
+        """STSJ y CCom deben matchear patrones especificos, no los genericos STS/CC."""
+        resp = "Segun la STSJ Cataluna 123/2024\nEl CCom articulo 30 regula"
+        fuentes = legal.extraer_fuentes_legales(resp)
+        assert len(fuentes) == 2
+        assert any("STSJ" in f for f in fuentes)
+        assert any("CCom" in f for f in fuentes)
+
 
 class TestNodosShape:
     """Verifica que los nodos thin-wrapper mantienen la signatura LangGraph."""

@@ -25,27 +25,27 @@ plantillas de escritos procesales.
 
 from __future__ import annotations
 
+import re
+
 from pgk_operativa.nodos._base import ejecutar_modulo
 
-_PATRONES_FUENTES_LEGAL: tuple[str, ...] = (
-    "Ley",
-    "BOE",
-    "Real Decreto",
-    "RD ",
-    "Articulo",
-    "Artículo",
-    "Art.",
-    "STS",
-    "STSJ",
-    "STC",
-    "Sentencia",
-    "Codigo Civil",
-    "Código Civil",
-    "LEC",
-    "LJCA",
-    "LPAC",
-    "CC",
-    "CCom",
+_PATRONES_FUENTES_LEGAL: tuple[re.Pattern[str], ...] = (
+    re.compile(r"\bReal Decreto\b", re.IGNORECASE),
+    re.compile(r"\bRD\s", re.IGNORECASE),
+    re.compile(r"\bBOE\b"),
+    re.compile(r"\bLey\b"),
+    re.compile(r"\bArt[ií]culo\b", re.IGNORECASE),
+    re.compile(r"\bArt\."),
+    re.compile(r"\bSentencia\b", re.IGNORECASE),
+    re.compile(r"\bSTSJ\b"),
+    re.compile(r"\bSTS\b"),
+    re.compile(r"\bSTC\b"),
+    re.compile(r"\bC[oó]digo Civil\b", re.IGNORECASE),
+    re.compile(r"\bLEC\b"),
+    re.compile(r"\bLJCA\b"),
+    re.compile(r"\bLPAC\b"),
+    re.compile(r"\bCCom\b"),
+    re.compile(r"\bCC\b"),
 )
 
 
@@ -79,7 +79,7 @@ def extraer_fuentes_legales(respuesta: str) -> list[str]:
     fuentes: list[str] = []
     for linea in respuesta.split("\n"):
         for patron in _PATRONES_FUENTES_LEGAL:
-            if patron in linea:
+            if patron.search(linea):
                 fuentes.append(linea.strip()[:100])
                 break
     return list(dict.fromkeys(fuentes))[:5]
