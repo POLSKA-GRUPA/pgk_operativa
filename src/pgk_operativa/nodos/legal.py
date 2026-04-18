@@ -58,9 +58,9 @@ def analisis_legal_basico(cliente_nif: str, tipo_caso: str, mensaje: str) -> dic
     return {
         "cliente_identificado": cliente_nif,
         "tipo_caso": tipo_caso,
-        "analisis_legal": "Analisis legal pendiente de revision por abogado colegiado.",
+        "analisis_legal": "Análisis legal pendiente de revisión por abogado colegiado.",
         "fuentes_citadas": [
-            "Codigo Civil (RD 24 julio 1889)",
+            "Código Civil (RD 24 julio 1889)",
             "Ley 1/2000 (LEC)",
             "Ley 39/2015 (LPAC)",
         ],

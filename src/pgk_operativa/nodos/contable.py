@@ -84,7 +84,7 @@ def analisis_contable_basico(cliente_nif: str, tipo_caso: str, mensaje: str) -> 
     return {
         "cliente_identificado": cliente_nif,
         "tipo_caso": tipo_caso,
-        "analisis_contable": "Analisis contable pendiente de revision por experto.",
+        "analisis_contable": "Análisis contable pendiente de revisión por experto.",
         "fuentes_citadas": [
             "RD 1514/2007 (Plan General Contable)",
             "Ley 37/1992 (IVA)",

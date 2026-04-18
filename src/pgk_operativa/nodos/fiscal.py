@@ -31,6 +31,7 @@ _PATRONES_FUENTES_FISCAL: tuple[str, ...] = (
     "Ley",
     "BOE",
     "Real Decreto",
+    "RD ",
     "Articulo",
     "Artículo",
     "Art.",
@@ -58,16 +59,16 @@ def analisis_fiscal_basico(cliente_nif: str, tipo_caso: str) -> dict[str, object
     return {
         "cliente_identificado": cliente_nif,
         "tipo_caso": tipo_caso,
-        "analisis_fiscal": "Analisis fiscal pendiente de revision por experto.",
+        "analisis_fiscal": "Análisis fiscal pendiente de revisión por experto.",
         "fuentes_citadas": [
             "BOE-A-2023-1234",
-            "Guia IRNR 2024 (Hacienda)",
+            "Guía IRNR 2024 (Hacienda)",
         ],
         "confianza": 0.5,
         "routing_decision": "fallback",
         "had_consensus": False,
         "recomendaciones": [
-            "Revisar documentacion del cliente",
+            "Revisar documentación del cliente",
             "Consultar normativa aplicable",
         ],
     }

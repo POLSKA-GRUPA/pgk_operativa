@@ -1,6 +1,6 @@
 pr: 6
 fecha: "2026-04-16"
-titulo: "Paso 5 - Descomposicion nodos.py: helpers deterministas por modulo + tests de regresion"
+titulo: "Paso 5 - Descomposición nodos.py: helpers deterministas por módulo + tests de regresión"
 archivos:
   # Fiscal: port de 3 helpers puros (sin deps pesadas) desde nodos.py origen
   - target: src/pgk_operativa/nodos/fiscal.py
