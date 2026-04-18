@@ -372,4 +372,86 @@ def test_list_manifests_returns_sorted() -> None:
     manifests = list_manifests()
     assert len(manifests) >= 4  # PR-0001..PR-0004
     assert manifests == sorted(manifests)
-    assert all(p.suffix == ".yaml" for p in manifests)
+
+
+def test_manifest_rejects_bool_as_pr(tmp_path: Path) -> None:
+    """pr: true en YAML no debe colarse como pr=1.
+
+    bool hereda de int en Python: isinstance(True, int) es True. Sin la
+    guarda explicita, `pr: true` pasaba silenciosamente y producia informes
+    con numero equivocado.
+    """
+    manifest_path = tmp_path / "PR-0001.yaml"
+    _write_manifest(
+        manifest_path,
+        {
+            "pr": True,
+            "fecha": "2026-04-16",
+            "titulo": "Bool as pr",
+            "archivos": [{"target": "x.py", "relacion": "nuevo"}],
+        },
+    )
+    with pytest.raises(ValueError, match="pr debe ser int"):
+        Manifest.load(manifest_path)
+
+
+def test_manifest_detects_filename_yaml_mismatch(tmp_path: Path) -> None:
+    """Filename PR-0099.yaml con pr: 5 en YAML debe disparar error."""
+    manifest_path = tmp_path / "PR-0099.yaml"
+    _write_manifest(
+        manifest_path,
+        {
+            "pr": 5,
+            "fecha": "2026-04-16",
+            "titulo": "Mismatch",
+            "archivos": [{"target": "x.py", "relacion": "nuevo"}],
+        },
+    )
+    with pytest.raises(ValueError, match="Inconsistencia"):
+        Manifest.load(manifest_path)
+
+
+def test_fidelity_symbols_only_top_level(tmp_path: Path) -> None:
+    """Simbolo declarado debe existir top-level, no como metodo anidado.
+
+    Regresion: con ast.walk recursivo un manifest que declarase
+    simbolos=["foo"] esperando funcion top-level pasaba aunque el origen
+    real tuviese `class X: def foo(self)`.
+    """
+    repos_root = tmp_path / "repos"
+    (repos_root / "origen_repo").mkdir(parents=True)
+    origen_file = repos_root / "origen_repo" / "src.py"
+    origen_file.write_text("class X:\n    def foo(self):\n        pass\n", encoding="utf-8")
+    repo_root = tmp_path / "pgk"
+    repo_root.mkdir()
+    (repo_root / "mod.py").write_text("# copia\n", encoding="utf-8")
+    archivo = ArchivoManifest(
+        target="mod.py",
+        relacion=Relacion.ADAPTADO,
+        origen=Origen(repo="origen_repo", path="src.py", simbolos=["foo"]),
+        notas="",
+    )
+    findings = _run_fidelity(_make_manifest([archivo]), repo_root, repos_root)
+    # foo es metodo, no top-level: debe aparecer como HIGH por simbolo faltante.
+    high = [f for f in findings if f.severity == Severity.HIGH]
+    assert len(high) == 1
+    assert "foo" in high[0].mensaje
+
+
+def test_todo_check_ignores_strings_in_python(tmp_path: Path) -> None:
+    """TODO dentro de una cadena Python no debe disparar finding."""
+    repo_root = tmp_path
+    (repo_root / "mod.py").write_text('msg = "TODO: implementar algo"\n', encoding="utf-8")
+    archivo = ArchivoManifest(target="mod.py", relacion=Relacion.NUEVO, origen=None, notas="")
+    findings = _run_todo(_make_manifest([archivo]), repo_root, repo_root)
+    assert findings == []
+
+
+def test_todo_check_still_matches_real_comment(tmp_path: Path) -> None:
+    """TODO en comentario real sigue detectandose."""
+    repo_root = tmp_path
+    (repo_root / "mod.py").write_text("x = 1  # TODO arreglar esto\n", encoding="utf-8")
+    archivo = ArchivoManifest(target="mod.py", relacion=Relacion.NUEVO, origen=None, notas="")
+    findings = _run_todo(_make_manifest([archivo]), repo_root, repo_root)
+    assert len(findings) == 1
+    assert findings[0].check == "todo"

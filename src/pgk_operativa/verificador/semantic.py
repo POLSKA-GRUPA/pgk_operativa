@@ -116,10 +116,27 @@ def run(manifest: Manifest, repo_root: Path, repos_root: Path) -> list[Finding]:
         return findings
 
     for archivo in eligibles:
-        assert archivo.origen is not None
+        # Filtrado explicito en lugar de assert: python -O elimina asserts y
+        # dejaria pasar archivo.origen None aqui, crasheando en absolute_path.
+        if archivo.origen is None:
+            continue
         target = archivo.target_path(repo_root)
         origen = archivo.origen.absolute_path(repos_root)
         if not target.exists() or not origen.exists():
+            # Silenciar aqui ocultaba al auditor que el check semantico no
+            # se ejecuto: emitimos LOW para que quede rastro en el informe.
+            findings.append(
+                Finding(
+                    check="semantic",
+                    severity=Severity.LOW,
+                    target=archivo.target,
+                    mensaje="Check semantico saltado: target u origen no existe en disco",
+                    detalle=(
+                        f"target_exists={target.exists()} ({target}). "
+                        f"origen_exists={origen.exists()} ({origen})."
+                    ),
+                )
+            )
             continue
         try:
             destino_text = _truncate(target.read_text(encoding="utf-8"))

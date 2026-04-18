@@ -12,6 +12,31 @@ _PATTERN = re.compile(r"\b(TODO|FIXME|XXX|HACK)\b[:\s](.*)$")
 _ISSUE = re.compile(r"#\d+|issue[-_ ]?\d+|PR-\d+", re.IGNORECASE)
 
 
+def _is_in_comment(line: str, match_start: int) -> bool:
+    """Heuristica: el match esta dentro de un comentario `#` o docstring.
+
+    Sin esta comprobacion el patron matcheaba TODOs dentro de cadenas tipo
+    msg = "TODO: fix", generando falsos positivos. Para Python basta con
+    exigir que aparezca `#` antes del match en la misma linea, o que la
+    linea empiece con triple-comillas (docstring abierto).
+    """
+    prefix = line[:match_start]
+    stripped = prefix.lstrip()
+    if stripped.startswith(("#", '"""', "'''")):
+        return True
+    # Buscar '#' fuera de cadenas simples a la izquierda del match.
+    in_single = False
+    in_double = False
+    for ch in prefix:
+        if ch == "'" and not in_double:
+            in_single = not in_single
+        elif ch == '"' and not in_single:
+            in_double = not in_double
+        elif ch == "#" and not in_single and not in_double:
+            return True
+    return False
+
+
 def run(manifest: Manifest, repo_root: Path, repos_root: Path) -> list[Finding]:
     """Lista TODOs sin referencia a issue o PR. Severidad LOW."""
     _ = repos_root
@@ -24,9 +49,15 @@ def run(manifest: Manifest, repo_root: Path, repos_root: Path) -> list[Finding]:
             lines = target.read_text(encoding="utf-8").splitlines()
         except UnicodeDecodeError:
             continue
+        is_python = target.suffix == ".py"
         for lineno, line in enumerate(lines, start=1):
             match = _PATTERN.search(line)
             if not match:
+                continue
+            # Para .py filtramos matches que caen dentro de cadenas para no
+            # disparar LOW sobre strings como `msg = "TODO: algo"`. Otros
+            # formatos (Markdown, YAML) no tienen esa distincion clara.
+            if is_python and not _is_in_comment(line, match.start()):
                 continue
             tail = match.group(2) or ""
             if _ISSUE.search(tail):

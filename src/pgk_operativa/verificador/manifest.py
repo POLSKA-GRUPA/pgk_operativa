@@ -147,8 +147,24 @@ class Manifest:
         titulo_raw = data.get("titulo") or ""
         archivos_raw = data.get("archivos") or []
 
-        if not isinstance(pr_raw, int) or pr_raw <= 0:
+        # bool hereda de int en Python: isinstance(True, int) es True.
+        # Un YAML con `pr: true` se cargaria como pr=1 silenciosamente.
+        # Excluimos bool explicitamente para forzar un entero real.
+        if isinstance(pr_raw, bool) or not isinstance(pr_raw, int) or pr_raw <= 0:
             raise ValueError(f"pr debe ser int > 0, got {pr_raw!r}")
+
+        # Validacion filename/YAML: si el archivo sigue el convenio PR-NNNN.yaml,
+        # el numero del nombre debe coincidir con el campo pr del YAML. Sin esta
+        # guarda, renombrar un manifest sin editar el campo genera informes con
+        # el numero equivocado.
+        stem = manifest_path.stem
+        if stem.startswith("PR-") and stem[3:].isdigit():
+            expected = int(stem[3:])
+            if expected != pr_raw:
+                raise ValueError(
+                    f"Inconsistencia: filename '{manifest_path.name}' sugiere "
+                    f"pr={expected} pero el YAML declara pr={pr_raw}."
+                )
         if not isinstance(archivos_raw, list):
             raise ValueError("archivos debe ser lista")
 

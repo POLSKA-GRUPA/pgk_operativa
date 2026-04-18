@@ -37,18 +37,24 @@ def _parse_lineas(rango: str) -> tuple[int, int] | None:
 
 
 def _extract_symbols(source: str) -> set[str] | None:
-    """Extrae nombres de def/class del origen.
+    """Extrae nombres de def/class del origen (solo top-level).
 
     Devuelve None si el archivo no parsea como Python (SyntaxError). El caller
     debe distinguir "no pude parsear" de "parse OK pero falta el simbolo"
     para no disparar falsos positivos HIGH.
+
+    Solo se recolectan simbolos top-level del modulo. Con ast.walk recursivo
+    se recogian tambien metodos dentro de clases y funciones anidadas, lo
+    que disparaba falsos negativos: un manifest que declarase
+    simbolos=["foo"] esperando una funcion top-level pasaba la verificacion
+    aunque el origen real tuviese `class X: def foo(self)`.
     """
     try:
         tree = ast.parse(source)
     except SyntaxError:
         return None
     out: set[str] = set()
-    for node in ast.walk(tree):
+    for node in tree.body:
         if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
             out.add(node.name)
     return out
