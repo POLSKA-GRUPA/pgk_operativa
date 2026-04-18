@@ -103,8 +103,14 @@ def assert_distinct_consensus(a: LLMConfig, b: LLMConfig) -> None:
 def pick_consensus_pair() -> tuple[LLMConfig, LLMConfig] | None:
     """Elige 2 proveedores distintos para consenso.
 
-    Prioridad: (Z.ai, Anthropic) > (Z.ai, Gemini) > (Z.ai, XAI) >
-    (Anthropic, Gemini) > ... hasta agotar combinaciones.
+    Regla: el primer elemento sigue el orden de preferencia de
+    `_PROVIDER_PRIORITY` (Z.ai primero por coste, luego Anthropic por
+    calidad, etc.); el segundo es el siguiente disponible distinto. Esto
+    cubre TODAS las combinaciones posibles, incluidas las que tocan
+    OPENAI o DEEPSEEK. Si limitamos a una lista hardcoded de pares, el
+    usuario que configure unicamente ZAI+OPENAI o solo OPENAI+DEEPSEEK
+    recibia `None` con 2 proveedores validos, lo que contradice el
+    docstring y degrada silenciosamente a single_model.
 
     Returns:
         None si no hay 2 proveedores disponibles.
@@ -113,16 +119,6 @@ def pick_consensus_pair() -> tuple[LLMConfig, LLMConfig] | None:
     available = available_providers()
     if len(available) < 2:
         return None
-
-    priority = [
-        (Provider.ZAI, Provider.ANTHROPIC),
-        (Provider.ZAI, Provider.GEMINI),
-        (Provider.ZAI, Provider.XAI),
-        (Provider.ZAI, Provider.DEEPSEEK),
-        (Provider.ANTHROPIC, Provider.GEMINI),
-        (Provider.ANTHROPIC, Provider.XAI),
-        (Provider.GEMINI, Provider.XAI),
-    ]
 
     models: dict[Provider, tuple[str, str]] = {
         Provider.ZAI: (s.zai_openai_model, "ZAI_API_KEY"),
@@ -133,15 +129,30 @@ def pick_consensus_pair() -> tuple[LLMConfig, LLMConfig] | None:
         Provider.OPENAI: (s.openai_model, "OPENAI_API_KEY"),
     }
 
-    for p_a, p_b in priority:
-        if p_a in available and p_b in available:
+    ordered = [p for p in _PROVIDER_PRIORITY if p in available]
+    for i, p_a in enumerate(ordered):
+        for p_b in ordered[i + 1 :]:
             model_a, env_a = models[p_a]
             model_b, env_b = models[p_b]
+            if model_a == model_b:
+                # Misma identidad efectiva (p.ej. dos proxies al mismo
+                # modelo): saltamos para que el assert no rompa.
+                continue
             cfg_a = LLMConfig(provider=p_a, model=model_a, api_key_env=env_a)
             cfg_b = LLMConfig(provider=p_b, model=model_b, api_key_env=env_b)
             assert_distinct_consensus(cfg_a, cfg_b)
             return cfg_a, cfg_b
     return None
+
+
+_PROVIDER_PRIORITY: tuple[Provider, ...] = (
+    Provider.ZAI,
+    Provider.ANTHROPIC,
+    Provider.GEMINI,
+    Provider.XAI,
+    Provider.DEEPSEEK,
+    Provider.OPENAI,
+)
 
 
 __all__ = [

@@ -31,7 +31,12 @@ def extract_cifras(texto: str) -> set[str]:
 
 
 def extract_citas_normativas(texto: str) -> set[str]:
-    """Extrae citas normativas (ECLI, BOE, leyes, modelos AEAT)."""
+    """Extrae citas normativas (ECLI, BOE, leyes, modelos AEAT).
+
+    Usa `re.IGNORECASE` para aceptar variantes como 'ley 35/2006' o
+    'modelo 210': sin el flag, Jaccard fallaba entre proveedores que
+    escribieran las normas con distinta capitalizacion.
+    """
     patrones = [
         r"ECLI:ES:\w+:\d{4}:\d+",
         r"BOE-\w+-\d+(?:-\d+)*",
@@ -41,7 +46,7 @@ def extract_citas_normativas(texto: str) -> set[str]:
     ]
     citas: set[str] = set()
     for patron in patrones:
-        citas.update(re.findall(patron, texto))
+        citas.update(re.findall(patron, texto, re.IGNORECASE))
     return citas
 
 
@@ -55,6 +60,22 @@ def jaccard(a: set[str], b: set[str]) -> float:
     return len(a & b) / len(union)
 
 
+def _norm(items: set[str]) -> set[str]:
+    """Normaliza tokens para comparacion Jaccard: lower() + strip + colapsa espacios.
+
+    Sin esta normalizacion, "Modelo 210" y "modelo 210" cuentan como
+    distintos en el set: dos proveedores que citan la misma norma con
+    capitalizacion diferente obtenian Jaccard 0 cuando deberia ser 1.
+    Igual para "1500 EUR" vs "1500 eur" y "Ley 35/2006" vs "ley 35/2006".
+    """
+    out: set[str] = set()
+    for tok in items:
+        norm = " ".join(tok.lower().split())
+        if norm:
+            out.add(norm)
+    return out
+
+
 def calcular_acuerdo(respuesta_a: str, respuesta_b: str) -> tuple[float, float]:
     """Calcula acuerdo sintactico y semantico entre dos respuestas.
 
@@ -65,10 +86,10 @@ def calcular_acuerdo(respuesta_a: str, respuesta_b: str) -> tuple[float, float]:
     como stub. En Semana 3 se sustituira por coseno de embeddings
     (OpenAI text-embedding-3-small).
     """
-    cifras_a = extract_cifras(respuesta_a)
-    cifras_b = extract_cifras(respuesta_b)
-    citas_a = extract_citas_normativas(respuesta_a)
-    citas_b = extract_citas_normativas(respuesta_b)
+    cifras_a = _norm(extract_cifras(respuesta_a))
+    cifras_b = _norm(extract_cifras(respuesta_b))
+    citas_a = _norm(extract_citas_normativas(respuesta_a))
+    citas_b = _norm(extract_citas_normativas(respuesta_b))
 
     cifras_overlap = jaccard(cifras_a, cifras_b)
     citas_overlap = jaccard(citas_a, citas_b)
