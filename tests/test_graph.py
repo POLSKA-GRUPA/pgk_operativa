@@ -102,6 +102,99 @@ def test_graph_run_llm_failure_returns_graceful_message() -> None:
     assert any(e.get("evento") == "llm_error" for e in resultado["audit_trail"])
 
 
+def test_graph_preserves_enrichment_fields_fiscal() -> None:
+    """Regresion PR#7 Devin Review: los helpers enriquecen el estado con
+    `fuentes_citadas` y `recomendaciones`. Si `AnaState` no declara esas
+    claves, LangGraph las descarta al hacer merge. Este test pasa por el
+    grafo entero y comprueba que llegan al estado final.
+    """
+    respuesta_llm = (
+        "Segun la Ley 35/2006 del IRPF y el Real Decreto 439/2007,\n"
+        "el contribuyente debe presentar el modelo 210 antes del 31 de enero.\n"
+        "Recomiendo revisar el Articulo 24 del Convenio de doble imposicion.\n"
+        "Es importante conservar los justificantes al menos 4 anos."
+    )
+
+    class _MockChoice:
+        def __init__(self, content: str) -> None:
+            self.message = type("M", (), {"content": content})()
+
+    class _MockResp:
+        def __init__(self, content: str) -> None:
+            self.choices = [_MockChoice(content)]
+
+    class _MockCompletions:
+        def create(self, **_kwargs: object) -> _MockResp:
+            return _MockResp(respuesta_llm)
+
+    class _MockChat:
+        completions = _MockCompletions()
+
+    class _MockClient:
+        chat = _MockChat()
+
+    with patch(
+        "pgk_operativa.nodos._base.build_openai_client",
+        return_value=(_MockClient(), "glm-4.6"),
+    ):
+        resultado = graph_module.run("modelo 210 IRNR alquiler polaco")
+
+    assert resultado["modulo_tecnico"] == "fiscal"
+    fuentes = resultado.get("fuentes_citadas", [])
+    recomendaciones = resultado.get("recomendaciones", [])
+    assert isinstance(fuentes, list), "fuentes_citadas debe sobrevivir al merge del grafo"
+    assert isinstance(recomendaciones, list), "recomendaciones debe sobrevivir al merge del grafo"
+    assert len(fuentes) > 0, "el helper extrae al menos una fuente del texto simulado"
+    assert len(recomendaciones) > 0, (
+        "el helper extrae al menos una recomendacion del texto simulado"
+    )
+    assert any("Ley 35/2006" in f or "Real Decreto" in f for f in fuentes)
+
+
+def test_graph_preserves_enrichment_fields_contable() -> None:
+    """Regresion PR#7: campos contables (asientos_detectados, modelos_detectados,
+    pasos_aon) deben sobrevivir al merge del grafo.
+    """
+    respuesta_llm = (
+        "Debe cargar la cuenta 572 Bancos a la cuenta 700 Ventas.\n"
+        "Para la declaracion usar modelo 303 y modelo 390 anual.\n"
+        "Paso AON: importar el fichero de asientos en el programa externo.\n"
+    )
+
+    class _MockChoice:
+        def __init__(self, content: str) -> None:
+            self.message = type("M", (), {"content": content})()
+
+    class _MockResp:
+        choices: list[_MockChoice]
+
+        def __init__(self, content: str) -> None:
+            self.choices = [_MockChoice(content)]
+
+    class _MockCompletions:
+        def create(self, **_kwargs: object) -> _MockResp:
+            return _MockResp(respuesta_llm)
+
+    class _MockChat:
+        completions = _MockCompletions()
+
+    class _MockClient:
+        chat = _MockChat()
+
+    with patch(
+        "pgk_operativa.nodos._base.build_openai_client",
+        return_value=(_MockClient(), "glm-4.6"),
+    ):
+        resultado = graph_module.run("asiento PGC cuenta 572 venta cliente")
+
+    assert resultado["modulo_tecnico"] == "contable"
+    assert isinstance(resultado.get("asientos_detectados", []), list)
+    assert isinstance(resultado.get("modelos_detectados", []), list)
+    assert isinstance(resultado.get("pasos_aon", []), list)
+    modelos = resultado.get("modelos_detectados", [])
+    assert "303" in modelos or "390" in modelos
+
+
 @pytest.mark.parametrize(
     ("mensaje", "modulo_esperado"),
     [

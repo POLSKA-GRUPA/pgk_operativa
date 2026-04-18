@@ -55,6 +55,12 @@ class AnaState(TypedDict, total=False):
     respuesta_tecnica: Annotated[str, replace_or_set]
     respuesta_final: Annotated[str, replace_or_set]
 
+    fuentes_citadas: Annotated[list[str], replace_or_set]
+    recomendaciones: Annotated[list[str], replace_or_set]
+    asientos_detectados: Annotated[list[str], replace_or_set]
+    modelos_detectados: Annotated[list[str], replace_or_set]
+    pasos_aon: Annotated[list[str], replace_or_set]
+
     audit_trail: Annotated[list[dict[str, object]], operator.add]
     timestamp_inicio: Annotated[str, replace_or_set]
     timestamp_fin: Annotated[str | None, replace_or_set]
