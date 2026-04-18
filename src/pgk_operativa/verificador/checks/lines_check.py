@@ -11,8 +11,25 @@ MIN_LINES_CODE = 5
 MIN_LINES_LITERAL = 15
 
 
-def _count_non_blank(text: str) -> int:
-    return sum(1 for line in text.splitlines() if line.strip())
+def _count_non_blank(text: str, suffix: str) -> int:
+    """Cuenta lineas con contenido real.
+
+    Un archivo .py con 20 lineas de `# TODO: implementar` tecnicamente tiene
+    20 lineas no-blank, pero es un caparazon: al ejecutarlo no pasa nada. Para
+    el objetivo del check (detectar caparazones) excluimos comentarios puros
+    de Python/shell/YAML. Para otros formatos (.md, .json, .txt) contamos
+    todas las lineas con contenido: ahi un `#` puede ser markdown o dato.
+    """
+    skip_hash_comments = suffix in {".py", ".pyi", ".sh", ".yml", ".yaml", ".toml"}
+    count = 0
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if skip_hash_comments and stripped.startswith("#"):
+            continue
+        count += 1
+    return count
 
 
 def run(manifest: Manifest, repo_root: Path, repos_root: Path) -> list[Finding]:
@@ -31,7 +48,7 @@ def run(manifest: Manifest, repo_root: Path, repos_root: Path) -> list[Finding]:
             content = target.read_text(encoding="utf-8")
         except UnicodeDecodeError:
             continue
-        non_blank = _count_non_blank(content)
+        non_blank = _count_non_blank(content, target.suffix)
 
         min_required = (
             MIN_LINES_LITERAL if archivo.relacion == Relacion.COPIA_LITERAL else MIN_LINES_CODE

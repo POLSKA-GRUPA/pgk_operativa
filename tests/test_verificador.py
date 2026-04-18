@@ -161,6 +161,33 @@ def test_lines_check_detects_empty_shell(tmp_path: Path) -> None:
     assert any(f.severity == Severity.HIGH for f in findings)
 
 
+def test_lines_check_flags_pure_comment_shell(tmp_path: Path) -> None:
+    """Bug #30: archivo .py con 10 lineas de solo comentario era caparazon no detectado.
+
+    El contador antiguo aceptaba cualquier linea con contenido, incluyendo
+    comentarios puros, asi que 10 lineas de `# TODO: implementar` pasaban el
+    minimo de 5 aunque el archivo no ejecutase nada.
+    """
+    (tmp_path / "src").mkdir()
+    comment_lines = "\n".join(f"# linea {i}: pendiente" for i in range(12)) + "\n"
+    (tmp_path / "src" / "caparazon.py").write_text(comment_lines, encoding="utf-8")
+    archivo = ArchivoManifest(
+        target="src/caparazon.py", relacion=Relacion.NUEVO, origen=None, notas=""
+    )
+    findings = _run_lines(_make_manifest([archivo]), tmp_path, tmp_path)
+    assert any(f.severity == Severity.HIGH for f in findings), findings
+
+
+def test_lines_check_does_not_flag_markdown_with_hash(tmp_path: Path) -> None:
+    """Los `#` de markdown (encabezados) NO deben descartarse: son contenido real."""
+    (tmp_path / "docs").mkdir()
+    md = "\n".join(f"# Encabezado {i}\nTexto de la seccion {i}." for i in range(6)) + "\n"
+    (tmp_path / "docs" / "guia.md").write_text(md, encoding="utf-8")
+    archivo = ArchivoManifest(target="docs/guia.md", relacion=Relacion.NUEVO, origen=None, notas="")
+    findings = _run_lines(_make_manifest([archivo]), tmp_path, tmp_path)
+    assert not findings, findings
+
+
 def test_lines_check_skips_init(tmp_path: Path) -> None:
     (tmp_path / "src").mkdir()
     (tmp_path / "src" / "__init__.py").write_text("", encoding="utf-8")
